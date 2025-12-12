@@ -1,0 +1,113 @@
+{
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "path": "/docs",
+      "versions": [
+        {
+          "name": "current",
+          "label": "Next",
+          "isLast": true,
+          "path": "/docs",
+          "mainDocId": "intro",
+          "docs": [
+            {
+              "id": "intro",
+              "path": "/docs/intro",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-1-ros2/index",
+              "path": "/docs/modules/module-1-ros2/",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-1-ros2/nodes-topics-services",
+              "path": "/docs/modules/module-1-ros2/nodes-topics-services",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-1-ros2/rclpy-python-agent",
+              "path": "/docs/modules/module-1-ros2/rclpy-python-agent",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-1-ros2/urdf-humanoid",
+              "path": "/docs/modules/module-1-ros2/urdf-humanoid",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-2-digital-twin/gazebo-physics",
+              "path": "/docs/modules/module-2-digital-twin/gazebo-physics",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-2-digital-twin/index",
+              "path": "/docs/modules/module-2-digital-twin/",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-2-digital-twin/sensor-simulation",
+              "path": "/docs/modules/module-2-digital-twin/sensor-simulation",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-2-digital-twin/unity-rendering",
+              "path": "/docs/modules/module-2-digital-twin/unity-rendering",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-3-ai-brain/index",
+              "path": "/docs/modules/module-3-ai-brain/",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-3-ai-brain/isaac-ros-pipelines",
+              "path": "/docs/modules/module-3-ai-brain/isaac-ros-pipelines",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-3-ai-brain/isaac-sim",
+              "path": "/docs/modules/module-3-ai-brain/isaac-sim",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-3-ai-brain/nav2-bipedal",
+              "path": "/docs/modules/module-3-ai-brain/nav2-bipedal",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-4-vla/autonomous-humanoid",
+              "path": "/docs/modules/module-4-vla/autonomous-humanoid",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-4-vla/index",
+              "path": "/docs/modules/module-4-vla/",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-4-vla/llm-cognitive-planning",
+              "path": "/docs/modules/module-4-vla/llm-cognitive-planning",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "modules/module-4-vla/whisper-voice-action",
+              "path": "/docs/modules/module-4-vla/whisper-voice-action",
+              "sidebar": "tutorialSidebar"
+            }
+          ],
+          "draftIds": [],
+          "sidebars": {
+            "tutorialSidebar": {
+              "link": {
+                "path": "/docs/intro",
+                "label": "intro"
+              }
+            }
+          }
+        }
+      ],
+      "breadcrumbs": true
+    }
+  }
+}

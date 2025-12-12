@@ -1,0 +1,140 @@
+# RAG Query API Contract
+
+## Overview
+This API provides retrieval-augmented generation (RAG) capabilities for the Physical AI & Humanoid Robotics book. It allows users to query book content and receive responses grounded in the book text.
+
+## Base URL
+`http://localhost:8000/api/v1` (development)
+`https://your-domain.com/api/v1` (production)
+
+## Authentication
+This API uses API key authentication via the `Authorization` header:
+```
+Authorization: Bearer {api_key}
+```
+
+## Endpoints
+
+### POST /rag/query
+Submit a query to the RAG system and receive a response based on book content.
+
+#### Request
+```json
+{
+  "question": "string (required) - The question to ask about the book content",
+  "grounding_mode": "enum (required) - 'full_book' or 'selected_text'",
+  "selected_text": "string (optional) - Text selected by user when in selected_text mode",
+  "session_id": "string (optional) - Session identifier for conversation context",
+  "max_results": "integer (optional) - Maximum number of documents to retrieve (default: 5)"
+}
+```
+
+#### Response (Success 200)
+```json
+{
+  "id": "string - Unique identifier for this response",
+  "question": "string - The original question",
+  "answer": "string - The generated answer based on book content",
+  "sources": [
+    {
+      "document_id": "string - ID of the source document",
+      "title": "string - Title of the source document",
+      "content": "string - Relevant content snippet",
+      "similarity_score": "number - Similarity score between 0 and 1",
+      "module": "string - Module identifier",
+      "chapter": "string - Chapter identifier"
+    }
+  ],
+  "session_id": "string - Session identifier",
+  "timestamp": "string - ISO 8601 timestamp"
+}
+```
+
+#### Response (Error 400)
+```json
+{
+  "error": "string - Error message",
+  "details": "object - Additional error details"
+}
+```
+
+#### Example Request
+```json
+{
+  "question": "How does ROS 2 handle communication between nodes?",
+  "grounding_mode": "full_book"
+}
+```
+
+#### Example Response
+```json
+{
+  "id": "resp_abc123",
+  "question": "How does ROS 2 handle communication between nodes?",
+  "answer": "ROS 2 handles communication between nodes through a publish-subscribe model using topics, as well as request-response patterns using services...",
+  "sources": [
+    {
+      "document_id": "module-1-ros2/chapter-1/0",
+      "title": "ROS 2 Nodes, Topics, Services",
+      "content": "In ROS 2, nodes communicate with each other through topics using a publish-subscribe model...",
+      "similarity_score": 0.92,
+      "module": "module-1-ros2",
+      "chapter": "chapter-1-nodes-topics-services"
+    }
+  ],
+  "session_id": "sess_xyz789",
+  "timestamp": "2025-12-10T10:30:00Z"
+}
+```
+
+### POST /rag/index
+Index book content for RAG retrieval.
+
+#### Request
+```json
+{
+  "documents": [
+    {
+      "id": "string (required) - Unique document identifier",
+      "title": "string (required) - Document title",
+      "module": "string (required) - Module identifier",
+      "chapter": "string (required) - Chapter identifier",
+      "content": "string (required) - Document content to be indexed",
+      "chunk_id": "string (required) - Unique identifier for this chunk",
+      "chunk_index": "integer (required) - Position of this chunk in the document"
+    }
+  ]
+}
+```
+
+#### Response (Success 200)
+```json
+{
+  "indexed_count": "integer - Number of documents successfully indexed",
+  "errors": "array - List of any indexing errors"
+}
+```
+
+### GET /rag/status
+Check the status of the RAG service.
+
+#### Response (Success 200)
+```json
+{
+  "status": "string - Service status (e.g., 'healthy')",
+  "indexed_documents": "integer - Number of documents currently indexed",
+  "model": "string - Name of the embedding model in use",
+  "timestamp": "string - ISO 8601 timestamp"
+}
+```
+
+## Error Codes
+- 400: Bad Request - Invalid request parameters
+- 401: Unauthorized - Missing or invalid API key
+- 404: Not Found - Requested resource does not exist
+- 429: Too Many Requests - Rate limit exceeded
+- 500: Internal Server Error - Service error
+
+## Rate Limits
+- 100 requests per minute per IP
+- 1000 requests per hour per API key

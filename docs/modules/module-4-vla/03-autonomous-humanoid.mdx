@@ -1,0 +1,1480 @@
+---
+sidebar_label: 'Capstone: Autonomous Humanoid Pipeline'
+sidebar_position: 3
+---
+
+# Capstone: Autonomous Humanoid Pipeline
+
+## Introduction
+
+This capstone chapter integrates all the concepts from the Physical AI & Humanoid Robotics book into a complete autonomous humanoid pipeline. We'll combine ROS 2 fundamentals, simulation environments, perception systems, and Vision-Language-Action capabilities into a unified system that can understand voice commands, navigate environments, and perform complex tasks autonomously.
+
+## Complete System Architecture
+
+### High-Level System Overview
+
+The autonomous humanoid pipeline consists of interconnected modules:
+
+1. **Perception Layer**: Sensor processing and environment understanding
+2. **Cognition Layer**: LLM-based reasoning and planning
+3. **Action Layer**: Low-level control and execution
+4. **Communication Layer**: Voice and multimodal interaction
+5. **Integration Layer**: ROS 2 coordination and messaging
+
+```yaml
+# Complete autonomous humanoid system configuration
+# Main launch file components
+autonomous_humanoid_system:
+  ros__parameters:
+    # System-wide parameters
+    system_name: "autonomous_humanoid"
+    operational_mode: "autonomous"  # autonomous, teleop, semi_autonomous
+    safety_level: "high"  # low, medium, high
+    max_operation_time: 3600  # seconds
+
+humanoid_perception:
+  ros__parameters:
+    # Camera settings
+    camera_topic: "/camera/rgb/image_raw"
+    camera_info_topic: "/camera/rgb/camera_info"
+    image_processing_rate: 10.0  # Hz
+
+    # LiDAR settings
+    laser_topic: "/scan"
+    obstacle_detection_range: 5.0  # meters
+
+    # IMU settings
+    imu_topic: "/imu/data"
+    balance_threshold: 0.1  # radians
+
+humanoid_cognition:
+  ros__parameters:
+    # LLM settings
+    llm_model: "gpt-3.5-turbo"
+    llm_api_key: "your_api_key_here"
+    max_tokens: 1000
+    temperature: 0.3
+
+    # Planning parameters
+    plan_timeout: 30.0  # seconds
+    max_plan_steps: 50
+    replanning_frequency: 1.0  # Hz
+
+humanoid_control:
+  ros__parameters:
+    # Navigation parameters
+    navigation_stack: "nav2"
+    global_planner: "nav2_navfn_planner/NavfnPlanner"
+    local_planner: "dwb_core/DWBLocalPlanner"
+
+    # Manipulation parameters
+    arm_controller: "arm_controller"
+    gripper_controller: "gripper_controller"
+
+    # Balance control
+    balance_controller: "balance_controller"
+    zmp_margin: 0.05  # meters
+
+humanoid_communication:
+  ros__parameters:
+    # Audio input
+    audio_input_topic: "/audio_input"
+    speech_recognition_model: "whisper-base"
+
+    # Text-to-speech
+    tts_service: "text_to_speech"
+    speech_volume: 0.8
+```
+
+## Complete System Launch
+
+### Main Launch File
+
+```python
+# Complete autonomous humanoid launch file
+import os
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, RegisterEventHandler
+from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node, ComposableNodeContainer
+from launch_ros.descriptions import ComposableNode
+from launch_ros.substitutions import FindPackageShare
+from ament_index_python.packages import get_package_share_directory
+
+def generate_launch_description():
+    # Launch configuration variables
+    use_sim_time = LaunchConfiguration('use_sim_time')
+    autostart = LaunchConfiguration('autostart')
+    log_level = LaunchConfiguration('log_level')
+
+    # Declare launch arguments
+    declare_use_sim_time = DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='false',
+        description='Use simulation (Gazebo) clock if true'
+    )
+
+    declare_autostart = DeclareLaunchArgument(
+        'autostart',
+        default_value='true',
+        description='Automatically start the controllers'
+    )
+
+    declare_log_level = DeclareLaunchArgument(
+        'log_level',
+        default_value='info',
+        description='Log level for the nodes'
+    )
+
+    # Launch navigation system
+    navigation_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            PathJoinSubstitution([
+                FindPackageShare('nav2_bringup'),
+                'launch',
+                'navigation_launch.py'
+            ])
+        ]),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+            'autostart': autostart
+        }.items()
+    )
+
+    # Launch perception system
+    perception_container = ComposableNodeContainer(
+        name='perception_container',
+        namespace='',
+        package='rclcpp_components',
+        executable='component_container',
+        composable_node_descriptions=[
+            ComposableNode(
+                package='isaac_ros_apriltag',
+                plugin='nvidia::isaac_ros::apriltag::AprilTagNode',
+                name='apriltag',
+                parameters=[{
+                    'size': 0.16,
+                    'max_tags': 64,
+                    'tile_size': 1
+                }]
+            ),
+            ComposableNode(
+                package='isaac_ros_stereo_image_proc',
+                plugin='nvidia::isaac_ros::stereo_image_proc::DisparityNode',
+                name='disparity',
+                parameters=[{
+                    'approximate_sync': True
+                }]
+            )
+        ],
+        output='screen'
+    )
+
+    # Launch cognitive planning node
+    cognitive_planning_node = Node(
+        package='autonomous_humanoid',
+        executable='cognitive_planning_node',
+        name='cognitive_planner',
+        parameters=[
+            PathJoinSubstitution([
+                FindPackageShare('autonomous_humanoid'),
+                'config',
+                'cognitive_planning.yaml'
+            ]),
+            {'use_sim_time': use_sim_time}
+        ],
+        output='screen'
+    )
+
+    # Launch voice interaction node
+    voice_interaction_node = Node(
+        package='autonomous_humanoid',
+        executable='voice_interaction_node',
+        name='voice_interaction',
+        parameters=[
+            PathJoinSubstitution([
+                FindPackageShare('autonomous_humanoid'),
+                'config',
+                'voice_interaction.yaml'
+            ]),
+            {'use_sim_time': use_sim_time}
+        ],
+        output='screen'
+    )
+
+    # Launch balance controller
+    balance_controller_node = Node(
+        package='autonomous_humanoid',
+        executable='balance_controller_node',
+        name='balance_controller',
+        parameters=[
+            PathJoinSubstitution([
+                FindPackageShare('autonomous_humanoid'),
+                'config',
+                'balance_control.yaml'
+            ]),
+            {'use_sim_time': use_sim_time}
+        ],
+        output='screen'
+    )
+
+    # Launch main orchestrator
+    orchestrator_node = Node(
+        package='autonomous_humanoid',
+        executable='system_orchestrator_node',
+        name='system_orchestrator',
+        parameters=[
+            PathJoinSubstitution([
+                FindPackageShare('autonomous_humanoid'),
+                'config',
+                'system_config.yaml'
+            ]),
+            {'use_sim_time': use_sim_time}
+        ],
+        output='screen'
+    )
+
+    # Create launch description
+    ld = LaunchDescription()
+
+    # Add launch arguments
+    ld.add_action(declare_use_sim_time)
+    ld.add_action(declare_autostart)
+    ld.add_action(declare_log_level)
+
+    # Add nodes
+    ld.add_action(navigation_launch)
+    ld.add_action(perception_container)
+    ld.add_action(cognitive_planning_node)
+    ld.add_action(voice_interaction_node)
+    ld.add_action(balance_controller_node)
+    ld.add_action(orchestrator_node)
+
+    return ld
+```
+
+## System Orchestrator
+
+### Main Control Node
+
+```python
+# System orchestrator - the "brain" of the autonomous humanoid
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String, Bool, Int8
+from geometry_msgs.msg import PoseStamped, Twist
+from sensor_msgs.msg import LaserScan, Image, Imu
+from action_msgs.msg import GoalStatus
+from rclpy.action import ActionClient
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy, QoSReliabilityPolicy
+from threading import Lock
+import asyncio
+import json
+from enum import Enum
+from typing import Dict, Any, Optional, List
+
+class SystemState(Enum):
+    IDLE = 0
+    LISTENING = 1
+    PLANNING = 2
+    EXECUTING = 3
+    RECOVERING = 4
+    EMERGENCY_STOP = 5
+
+class SystemOrchestratorNode(Node):
+    def __init__(self):
+        super().__init__('system_orchestrator')
+
+        # System state management
+        self.state = SystemState.IDLE
+        self.state_lock = Lock()
+
+        # Configuration
+        self.declare_parameter('operation_mode', 'autonomous')
+        self.declare_parameter('safety_timeout', 30.0)
+        self.declare_parameter('max_velocity', 0.5)
+
+        self.operation_mode = self.get_parameter('operation_mode').value
+        self.safety_timeout = self.get_parameter('safety_timeout').value
+        self.max_velocity = self.get_parameter('max_velocity').value
+
+        # QoS profiles for different data types
+        self.sensor_qos = QoSProfile(
+            depth=10,
+            durability=QoSDurabilityPolicy.VOLATILE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT
+        )
+
+        self.command_qos = QoSProfile(
+            depth=10,
+            durability=QoSDurabilityPolicy.VOLATILE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            reliability=QoSReliabilityPolicy.RELIABLE
+        )
+
+        # Publishers
+        self.status_publisher = self.create_publisher(String, 'system_status', self.command_qos)
+        self.cmd_vel_publisher = self.create_publisher(Twist, 'cmd_vel', self.command_qos)
+        self.emergency_stop_publisher = self.create_publisher(Bool, 'emergency_stop', self.command_qos)
+
+        # Subscriptions
+        self.voice_command_subscription = self.create_subscription(
+            String,
+            'voice_command',
+            self.voice_command_callback,
+            self.command_qos
+        )
+
+        self.high_level_goal_subscription = self.create_subscription(
+            String,
+            'high_level_goal',
+            self.high_level_goal_callback,
+            self.command_qos
+        )
+
+        self.sensor_status_subscription = self.create_subscription(
+            String,
+            'sensor_status',
+            self.sensor_status_callback,
+            self.command_qos
+        )
+
+        self.planning_status_subscription = self.create_subscription(
+            String,
+            'planning_status',
+            self.planning_status_callback,
+            self.command_qos
+        )
+
+        self.execution_status_subscription = self.create_subscription(
+            String,
+            'execution_status',
+            self.execution_status_callback,
+            self.command_qos
+        )
+
+        # Safety monitoring
+        self.laser_subscription = self.create_subscription(
+            LaserScan,
+            'scan',
+            self.laser_callback,
+            self.sensor_qos
+        )
+
+        self.imu_subscription = self.create_subscription(
+            Imu,
+            'imu/data',
+            self.imu_callback,
+            self.sensor_qos
+        )
+
+        # Action clients for coordination
+        self.navigation_client = ActionClient(self, 'nav2_msgs.action.NavigateToPose', 'navigate_to_pose')
+        self.manipulation_client = ActionClient(self, 'control_msgs.action.FollowJointTrajectory', 'arm_controller/follow_joint_trajectory')
+
+        # System state
+        self.current_goal = None
+        self.active_plan = None
+        self.emergency_stop_active = False
+        self.last_sensor_update = self.get_clock().now()
+        self.safety_timer = self.create_timer(1.0, self.safety_check)
+
+        # Async execution
+        self.executor = asyncio.get_event_loop()
+
+        self.get_logger().info('System Orchestrator initialized')
+
+    def update_state(self, new_state: SystemState):
+        """Safely update system state"""
+        with self.state_lock:
+            old_state = self.state
+            self.state = new_state
+            self.get_logger().info(f'System state changed: {old_state.name} -> {new_state.name}')
+
+            # Publish state change
+            status_msg = String()
+            status_msg.data = f'STATE_CHANGE: {new_state.name}'
+            self.status_publisher.publish(status_msg)
+
+    def voice_command_callback(self, msg: String):
+        """Handle voice commands"""
+        if self.state == SystemState.EMERGENCY_STOP:
+            self.get_logger().warn('Ignoring voice command during emergency stop')
+            return
+
+        command = msg.data.lower().strip()
+        self.get_logger().info(f'Received voice command: {command}')
+
+        # Process command based on current state
+        if self.state == SystemState.IDLE:
+            if any(word in command for word in ['start', 'begin', 'go', 'execute']):
+                self.start_task_from_voice(command)
+            elif 'stop' in command or 'halt' in command:
+                self.update_state(SystemState.IDLE)
+            else:
+                self.process_high_level_command(command)
+        elif self.state == SystemState.LISTENING:
+            self.process_high_level_command(command)
+
+    def high_level_goal_callback(self, msg: String):
+        """Handle high-level goals"""
+        goal = msg.data
+        self.get_logger().info(f'Received high-level goal: {goal}')
+
+        if self.state in [SystemState.IDLE, SystemState.LISTENING]:
+            self.process_high_level_command(goal)
+
+    def process_high_level_command(self, command: str):
+        """Process high-level command and initiate planning"""
+        if self.emergency_stop_active:
+            self.get_logger().warn('Cannot process command during emergency stop')
+            return
+
+        self.current_goal = command
+        self.update_state(SystemState.PLANNING)
+
+        # Send goal to cognitive planner
+        goal_msg = String()
+        goal_msg.data = command
+
+        # This would typically go to the cognitive planning node
+        # For this example, we'll simulate the planning process
+        self.simulate_planning_process(command)
+
+    def simulate_planning_process(self, goal: str):
+        """Simulate the planning process"""
+        # In a real system, this would call the cognitive planning node
+        # For simulation, create a mock plan
+        mock_plan = [
+            {"action": "navigate", "target": {"x": 1.0, "y": 1.0, "theta": 0.0}, "description": "Move to location"},
+            {"action": "perceive", "target": "object", "description": "Look for object"},
+            {"action": "manipulate", "target": "object", "description": "Pick up object"}
+        ]
+
+        self.active_plan = mock_plan
+        self.get_logger().info(f'Generated plan with {len(mock_plan)} steps')
+
+        # Transition to execution
+        self.update_state(SystemState.EXECUTING)
+        self.execute_plan()
+
+    def execute_plan(self):
+        """Execute the active plan"""
+        if not self.active_plan:
+            self.get_logger().error('No active plan to execute')
+            self.update_state(SystemState.IDLE)
+            return
+
+        self.get_logger().info(f'Executing plan with {len(self.active_plan)} steps')
+
+        # Execute each step in the plan
+        for step in self.active_plan:
+            if self.state != SystemState.EXECUTING:
+                break  # Plan execution interrupted
+
+            success = self.execute_plan_step(step)
+            if not success:
+                self.get_logger().error(f'Plan execution failed at step: {step}')
+                self.update_state(SystemState.RECOVERING)
+                self.attempt_recovery()
+                break
+
+        if self.state == SystemState.EXECUTING:
+            self.get_logger().info('Plan execution completed successfully')
+            self.update_state(SystemState.IDLE)
+
+    def execute_plan_step(self, step: Dict[str, Any]) -> bool:
+        """Execute a single plan step"""
+        action = step.get('action', '')
+        target = step.get('target', {})
+
+        self.get_logger().info(f'Executing step: {action} - {step.get("description", "")}')
+
+        if action == 'navigate':
+            return self.execute_navigation_step(target)
+        elif action == 'perceive':
+            return self.execute_perception_step(target)
+        elif action == 'manipulate':
+            return self.execute_manipulation_step(target)
+        else:
+            self.get_logger().warn(f'Unknown action: {action}')
+            return False
+
+    def execute_navigation_step(self, target: Dict[str, Any]) -> bool:
+        """Execute navigation step"""
+        # Create navigation goal
+        from geometry_msgs.msg import PoseStamped
+        from nav2_msgs.action import NavigateToPose
+
+        goal_msg = NavigateToPose.Goal()
+        goal_msg.pose.header.frame_id = 'map'
+        goal_msg.pose.pose.position.x = float(target.get('x', 0.0))
+        goal_msg.pose.pose.position.y = float(target.get('y', 0.0))
+        goal_msg.pose.pose.position.z = 0.0
+
+        # Convert theta to quaternion
+        from math import sin, cos
+        theta = target.get('theta', 0.0)
+        goal_msg.pose.pose.orientation.z = sin(theta / 2.0)
+        goal_msg.pose.pose.orientation.w = cos(theta / 2.0)
+
+        # Send navigation goal
+        if self.navigation_client.wait_for_server(timeout_sec=5.0):
+            future = self.navigation_client.send_goal_async(goal_msg)
+            # Wait for result (in real system, this would be async)
+            return True
+        else:
+            self.get_logger().error('Navigation server not available')
+            return False
+
+    def execute_perception_step(self, target: Dict[str, Any]) -> bool:
+        """Execute perception step"""
+        # This would trigger perception nodes
+        # For this example, return success
+        self.get_logger().info(f'Performing perception for: {target}')
+        return True
+
+    def execute_manipulation_step(self, target: Dict[str, Any]) -> bool:
+        """Execute manipulation step"""
+        # This would trigger manipulation nodes
+        # For this example, return success
+        self.get_logger().info(f'Performing manipulation for: {target}')
+        return True
+
+    def attempt_recovery(self):
+        """Attempt to recover from execution failure"""
+        self.get_logger().info('Attempting recovery from execution failure')
+
+        # Recovery strategies could include:
+        # - Returning to a safe location
+        # - Requesting human assistance
+        # - Trying alternative approaches
+
+        # For this example, return to idle state
+        self.update_state(SystemState.IDLE)
+
+    def sensor_status_callback(self, msg: String):
+        """Handle sensor status updates"""
+        self.last_sensor_update = self.get_clock().now()
+
+        # Update sensor status in system state
+        # This could trigger different behaviors based on sensor health
+        if 'error' in msg.data.lower():
+            self.get_logger().warn(f'Sensor error: {msg.data}')
+            if self.state == SystemState.EXECUTING:
+                self.update_state(SystemState.RECOVERING)
+
+    def planning_status_callback(self, msg: String):
+        """Handle planning status updates"""
+        if 'completed' in msg.data.lower() and self.state == SystemState.PLANNING:
+            self.update_state(SystemState.EXECUTING)
+        elif 'failed' in msg.data.lower():
+            self.get_logger().error(f'Planning failed: {msg.data}')
+            self.update_state(SystemState.IDLE)
+
+    def execution_status_callback(self, msg: String):
+        """Handle execution status updates"""
+        if 'completed' in msg.data.lower() and self.state == SystemState.EXECUTING:
+            self.update_state(SystemState.IDLE)
+        elif 'failed' in msg.data.lower():
+            self.get_logger().error(f'Execution failed: {msg.data}')
+            self.update_state(SystemState.RECOVERING)
+
+    def laser_callback(self, msg: LaserScan):
+        """Handle laser scan for safety monitoring"""
+        if self.emergency_stop_active:
+            return
+
+        # Check for obstacles in path
+        min_distance = min([r for r in msg.ranges if 0 < r < float('inf')], default=float('inf'))
+
+        if min_distance < 0.5:  # 50cm safety margin
+            self.get_logger().warn(f'Obstacle detected at {min_distance:.2f}m, initiating safety stop')
+            self.activate_emergency_stop()
+
+    def imu_callback(self, msg: Imu):
+        """Handle IMU data for balance monitoring"""
+        if self.emergency_stop_active:
+            return
+
+        # Check for dangerous tilt angles
+        # Convert quaternion to roll/pitch
+        import math
+        sinr_cosp = 2 * (msg.orientation.w * msg.orientation.x + msg.orientation.y * msg.orientation.z)
+        cosr_cosp = 1 - 2 * (msg.orientation.x * msg.orientation.x + msg.orientation.y * msg.orientation.y)
+        roll = math.atan2(sinr_cosp, cosr_cosp)
+
+        sinp = 2 * (msg.orientation.w * msg.orientation.y - msg.orientation.z * msg.orientation.x)
+        if abs(sinp) >= 1:
+            pitch = math.copysign(math.pi / 2, sinp)
+        else:
+            pitch = math.asin(sinp)
+
+        # Check if tilt exceeds safe limits
+        max_tilt = 0.5  # 0.5 radians ~ 28 degrees
+        if abs(roll) > max_tilt or abs(pitch) > max_tilt:
+            self.get_logger().warn(f'Dangerous tilt detected: roll={roll:.2f}, pitch={pitch:.2f}')
+            self.activate_emergency_stop()
+
+    def safety_check(self):
+        """Periodic safety check"""
+        if self.emergency_stop_active:
+            return
+
+        # Check if sensor data is stale
+        time_since_sensor_update = (self.get_clock().now() - self.last_sensor_update).nanoseconds / 1e9
+        if time_since_sensor_update > self.safety_timeout:
+            self.get_logger().error(f'Sensor data stale for {time_since_sensor_update:.1f}s, initiating safety stop')
+            self.activate_emergency_stop()
+
+        # Check system health
+        if self.state == SystemState.EXECUTING:
+            # Additional checks during execution
+            pass
+
+    def activate_emergency_stop(self):
+        """Activate emergency stop"""
+        if not self.emergency_stop_active:
+            self.emergency_stop_active = True
+            self.get_logger().fatal('EMERGENCY STOP ACTIVATED')
+
+            # Stop all movement
+            stop_msg = Twist()
+            self.cmd_vel_publisher.publish(stop_msg)
+
+            # Publish emergency stop signal
+            emergency_msg = Bool()
+            emergency_msg.data = True
+            self.emergency_stop_publisher.publish(emergency_msg)
+
+            # Change state to emergency stop
+            self.update_state(SystemState.EMERGENCY_STOP)
+
+    def start_task_from_voice(self, command: str):
+        """Start a task based on voice command"""
+        if self.state == SystemState.EMERGENCY_STOP:
+            self.get_logger().warn('Cannot start task during emergency stop')
+            return
+
+        # Parse command and start appropriate task
+        if any(word in command for word in ['navigate', 'go to', 'move to']):
+            # Extract destination from command
+            self.process_navigation_command(command)
+        elif any(word in command for word in ['pick', 'grasp', 'take']):
+            # Extract object from command
+            self.process_manipulation_command(command)
+        elif any(word in command for word in ['follow', 'track']):
+            # Start following behavior
+            self.process_follow_command(command)
+        else:
+            # Send to cognitive planner for complex reasoning
+            self.process_high_level_command(command)
+
+    def process_navigation_command(self, command: str):
+        """Process navigation command"""
+        # In a real system, this would extract location from command
+        # For this example, use a default location
+        self.get_logger().info(f'Processing navigation command: {command}')
+        self.process_high_level_command(f"navigate to {command}")
+
+    def process_manipulation_command(self, command: str):
+        """Process manipulation command"""
+        self.get_logger().info(f'Processing manipulation command: {command}')
+        self.process_high_level_command(f"manipulate {command}")
+
+    def process_follow_command(self, command: str):
+        """Process follow command"""
+        self.get_logger().info(f'Processing follow command: {command}')
+        self.process_high_level_command(f"follow {command}")
+
+    def start_system(self):
+        """Start the autonomous system"""
+        if self.state == SystemState.IDLE:
+            self.get_logger().info('Starting autonomous humanoid system')
+            self.update_state(SystemState.LISTENING)
+
+    def stop_system(self):
+        """Stop the autonomous system"""
+        self.get_logger().info('Stopping autonomous humanoid system')
+        self.update_state(SystemState.IDLE)
+
+        # Stop all movement
+        stop_msg = Twist()
+        self.cmd_vel_publisher.publish(stop_msg)
+
+    def reset_system(self):
+        """Reset the system to initial state"""
+        self.emergency_stop_active = False
+        self.current_goal = None
+        self.active_plan = None
+        self.update_state(SystemState.IDLE)
+
+        self.get_logger().info('System reset complete')
+```
+
+## Integration with Simulation Environments
+
+### Isaac Sim Integration
+
+```python
+# Example of integrating with Isaac Sim for training and testing
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String, Bool
+from sensor_msgs.msg import Image, LaserScan
+from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
+import numpy as np
+
+class IsaacSimIntegrationNode(Node):
+    def __init__(self):
+        super().__init__('isaac_sim_integration')
+
+        # Publishers for Isaac Sim
+        self.sim_control_publisher = self.create_publisher(Bool, '/isaac_sim/control', 10)
+        self.sim_reset_publisher = self.create_publisher(Bool, '/isaac_sim/reset', 10)
+
+        # Subscriptions from Isaac Sim
+        self.sim_odom_subscription = self.create_subscription(
+            Odometry,
+            '/isaac_sim/ground_truth/odometry',
+            self.sim_odom_callback,
+            10
+        )
+
+        self.sim_image_subscription = self.create_subscription(
+            Image,
+            '/isaac_sim/camera/image',
+            self.sim_image_callback,
+            10
+        )
+
+        # Integration with main system
+        self.system_status_subscription = self.create_subscription(
+            String,
+            'system_status',
+            self.system_status_callback,
+            10
+        )
+
+        self.cmd_vel_subscription = self.create_subscription(
+            Twist,
+            'cmd_vel',
+            self.cmd_vel_callback,
+            10
+        )
+
+        # Simulation parameters
+        self.declare_parameter('sim_enabled', True)
+        self.declare_parameter('sim_rate', 100.0)  # Hz
+        self.declare_parameter('sim_reset_on_failure', True)
+
+        self.sim_enabled = self.get_parameter('sim_enabled').value
+        self.sim_rate = self.get_parameter('sim_rate').value
+        self.sim_reset_on_failure = self.get_parameter('sim_reset_on_failure').value
+
+        # Simulation state
+        self.sim_robot_pose = None
+        self.sim_last_reset = self.get_clock().now()
+
+        # Timer for simulation synchronization
+        self.sim_timer = self.create_timer(1.0/self.sim_rate, self.sim_sync_callback)
+
+        self.get_logger().info('Isaac Sim integration node initialized')
+
+    def system_status_callback(self, msg: String):
+        """Handle system status updates for simulation"""
+        if 'EMERGENCY_STOP' in msg.data and self.sim_reset_on_failure:
+            self.reset_simulation()
+
+    def cmd_vel_callback(self, msg: Twist):
+        """Forward velocity commands to simulation"""
+        if self.sim_enabled:
+            # In a real integration, this would send commands to Isaac Sim
+            # For this example, log the command
+            self.get_logger().debug(f'Sim cmd_vel: linear={msg.linear.x}, angular={msg.angular.z}')
+
+    def sim_odom_callback(self, msg: Odometry):
+        """Handle simulation odometry"""
+        self.sim_robot_pose = msg.pose.pose
+
+    def sim_image_callback(self, msg: Image):
+        """Handle simulation camera images"""
+        # Process simulation images
+        # This could be used for synthetic data generation
+        pass
+
+    def sim_sync_callback(self):
+        """Synchronize with simulation"""
+        if not self.sim_enabled:
+            return
+
+        # Perform any necessary synchronization tasks
+        # Check simulation health
+        pass
+
+    def reset_simulation(self):
+        """Reset the simulation environment"""
+        if self.sim_enabled:
+            reset_msg = Bool()
+            reset_msg.data = True
+            self.sim_reset_publisher.publish(reset_msg)
+            self.sim_last_reset = self.get_clock().now()
+            self.get_logger().info('Simulation reset triggered')
+
+    def configure_simulation_environment(self, env_config: dict):
+        """Configure simulation environment"""
+        # This would configure Isaac Sim with specific parameters
+        # For example: environment layout, object placement, lighting
+        pass
+```
+
+## Real-World Deployment Considerations
+
+### Hardware Abstraction Layer
+
+```python
+# Hardware abstraction for real-world deployment
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from sensor_msgs.msg import JointState, Imu
+from control_msgs.msg import JointTrajectoryControllerState
+from builtin_interfaces.msg import Duration
+import yaml
+
+class HardwareAbstractionNode(Node):
+    def __init__(self):
+        super().__init__('hardware_abstraction')
+
+        # Load hardware configuration
+        self.hardware_config = self.load_hardware_config()
+
+        # Initialize hardware interfaces based on configuration
+        self.initialize_hardware_interfaces()
+
+        # Publishers and subscriptions for hardware status
+        self.hardware_status_publisher = self.create_publisher(String, 'hardware_status', 10)
+
+        # Hardware state monitoring
+        self.joint_state_subscription = self.create_subscription(
+            JointState,
+            'joint_states',
+            self.joint_state_callback,
+            10
+        )
+
+        self.imu_subscription = self.create_subscription(
+            Imu,
+            'imu/data',
+            self.imu_callback,
+            10
+        )
+
+        # Timer for hardware health checks
+        self.health_check_timer = self.create_timer(1.0, self.hardware_health_check)
+
+        self.get_logger().info('Hardware abstraction layer initialized')
+
+    def load_hardware_config(self) -> dict:
+        """Load hardware configuration from file"""
+        # In a real system, this would load from a config file
+        # For this example, return a mock configuration
+        return {
+            'joints': {
+                'head_pan': {'type': 'revolute', 'limits': {'min': -1.57, 'max': 1.57}},
+                'head_tilt': {'type': 'revolute', 'limits': {'min': -0.78, 'max': 0.78}},
+                'left_hip': {'type': 'revolute', 'limits': {'min': -1.57, 'max': 1.57}},
+                'left_knee': {'type': 'revolute', 'limits': {'min': 0.0, 'max': 1.57}},
+                'left_ankle': {'type': 'revolute', 'limits': {'min': -0.78, 'max': 0.78}},
+                'right_hip': {'type': 'revolute', 'limits': {'min': -1.57, 'max': 1.57}},
+                'right_knee': {'type': 'revolute', 'limits': {'min': 0.0, 'max': 1.57}},
+                'right_ankle': {'type': 'revolute', 'limits': {'min': -0.78, 'max': 0.78}},
+                'left_shoulder': {'type': 'revolute', 'limits': {'min': -1.57, 'max': 1.57}},
+                'left_elbow': {'type': 'revolute', 'limits': {'min': -1.57, 'max': 0.0}},
+                'right_shoulder': {'type': 'revolute', 'limits': {'min': -1.57, 'max': 1.57}},
+                'right_elbow': {'type': 'revolute', 'limits': {'min': -1.57, 'max': 0.0}},
+            },
+            'sensors': {
+                'imu': {'type': 'imu', 'rate': 100},
+                'camera': {'type': 'rgb', 'rate': 30},
+                'lidar': {'type': 'laser', 'rate': 10},
+                'force_torque': {'type': 'force_torque', 'rate': 100}
+            },
+            'actuators': {
+                'head_pan': {'type': 'servo', 'max_speed': 1.0},
+                'head_tilt': {'type': 'servo', 'max_speed': 1.0},
+                # Add other actuators...
+            }
+        }
+
+    def initialize_hardware_interfaces(self):
+        """Initialize hardware interfaces based on configuration"""
+        # Initialize each joint controller
+        for joint_name, joint_config in self.hardware_config['joints'].items():
+            self.get_logger().info(f'Initializing joint: {joint_name}')
+
+        # Initialize sensors
+        for sensor_name, sensor_config in self.hardware_config['sensors'].items():
+            self.get_logger().info(f'Initializing sensor: {sensor_name}')
+
+    def joint_state_callback(self, msg: JointState):
+        """Monitor joint states for hardware health"""
+        # Check joint limits and safety
+        for i, name in enumerate(msg.name):
+            if name in self.hardware_config['joints']:
+                position = msg.position[i]
+                limits = self.hardware_config['joints'][name]['limits']
+
+                if position < limits['min'] or position > limits['max']:
+                    self.get_logger().warn(f'Joint {name} out of limits: {position}')
+
+    def imu_callback(self, msg: Imu):
+        """Monitor IMU data for hardware health"""
+        # Check IMU data validity
+        if abs(msg.linear_acceleration.x) > 20.0:  # Check for unrealistic values
+            self.get_logger().warn('Unrealistic IMU acceleration values')
+
+    def hardware_health_check(self):
+        """Perform periodic hardware health checks"""
+        # Check all hardware components
+        status = self.check_all_hardware()
+
+        status_msg = String()
+        status_msg.data = f"Hardware Status: {status['overall']}, Components: {status['details']}"
+        self.hardware_status_publisher.publish(status_msg)
+
+    def check_all_hardware(self) -> dict:
+        """Check health of all hardware components"""
+        # This would perform comprehensive hardware checks
+        # For this example, return a mock status
+        return {
+            'overall': 'OK',
+            'details': {
+                'joints': 'OK',
+                'sensors': 'OK',
+                'actuators': 'OK',
+                'power': 'OK'
+            }
+        }
+
+    def send_joint_commands(self, joint_positions: dict, duration: float = 1.0):
+        """Send commands to joints with hardware abstraction"""
+        # Validate commands against hardware limits
+        validated_positions = {}
+        for joint, position in joint_positions.items():
+            if joint in self.hardware_config['joints']:
+                limits = self.hardware_config['joints'][joint]['limits']
+                clamped_pos = max(limits['min'], min(limits['max'], position))
+                validated_positions[joint] = clamped_pos
+            else:
+                self.get_logger().warn(f'Unknown joint: {joint}')
+
+        # Send validated commands to hardware interface
+        # This would interface with the actual hardware controller
+        self.get_logger().info(f'Sending joint commands: {validated_positions}')
+```
+
+## Performance Monitoring and Optimization
+
+### System Performance Node
+
+```python
+# Performance monitoring for the autonomous system
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus
+from rclpy.qos import QoSProfile
+import psutil
+import time
+from collections import deque
+import threading
+
+class PerformanceMonitorNode(Node):
+    def __init__(self):
+        super().__init__('performance_monitor')
+
+        # Publishers
+        self.diag_publisher = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        self.performance_publisher = self.create_publisher(String, 'system_performance', 10)
+
+        # Performance tracking
+        self.cpu_usage_history = deque(maxlen=100)
+        self.memory_usage_history = deque(maxlen=100)
+        self.process_count_history = deque(maxlen=100)
+
+        # Component performance tracking
+        self.component_times = {}
+        self.component_calls = {}
+
+        # Monitoring timer
+        self.monitor_timer = self.create_timer(1.0, self.monitor_system)
+
+        # Threading for non-blocking monitoring
+        self.monitoring_thread = threading.Thread(target=self.background_monitoring)
+        self.monitoring_thread.daemon = True
+        self.monitoring_thread.start()
+
+        self.get_logger().info('Performance monitor initialized')
+
+    def monitor_system(self):
+        """Monitor system performance"""
+        # Get system metrics
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory_percent = psutil.virtual_memory().percent
+        process_count = len(psutil.pids())
+
+        # Store in history
+        self.cpu_usage_history.append(cpu_percent)
+        self.memory_usage_history.append(memory_percent)
+        self.process_count_history.append(process_count)
+
+        # Create diagnostic message
+        diag_array = DiagnosticArray()
+        diag_array.header.stamp = self.get_clock().now().to_msg()
+
+        # CPU diagnostic
+        cpu_diag = DiagnosticStatus()
+        cpu_diag.name = 'System CPU Usage'
+        cpu_diag.level = DiagnosticStatus.OK if cpu_percent < 80 else DiagnosticStatus.WARN if cpu_percent < 90 else DiagnosticStatus.ERROR
+        cpu_diag.message = f'CPU usage: {cpu_percent}%'
+        cpu_diag.hardware_id = 'system'
+        cpu_diag.values = [
+            {'key': 'CPU %', 'value': str(cpu_percent)},
+            {'key': 'Status', 'value': 'OK' if cpu_percent < 80 else 'WARNING' if cpu_percent < 90 else 'ERROR'}
+        ]
+        diag_array.status.append(cpu_diag)
+
+        # Memory diagnostic
+        memory_diag = DiagnosticStatus()
+        memory_diag.name = 'System Memory Usage'
+        memory_diag.level = DiagnosticStatus.OK if memory_percent < 80 else DiagnosticStatus.WARN if memory_percent < 90 else DiagnosticStatus.ERROR
+        memory_diag.message = f'Memory usage: {memory_percent}%'
+        memory_diag.hardware_id = 'system'
+        memory_diag.values = [
+            {'key': 'Memory %', 'value': str(memory_percent)},
+            {'key': 'Status', 'value': 'OK' if memory_percent < 80 else 'WARNING' if memory_percent < 90 else 'ERROR'}
+        ]
+        diag_array.status.append(memory_diag)
+
+        # Publish diagnostics
+        self.diag_publisher.publish(diag_array)
+
+        # Log performance if exceeding thresholds
+        if cpu_percent > 85 or memory_percent > 85:
+            self.get_logger().warn(f'High resource usage - CPU: {cpu_percent}%, Memory: {memory_percent}%')
+
+    def background_monitoring(self):
+        """Background monitoring thread"""
+        while rclpy.ok():
+            try:
+                # Perform background monitoring tasks
+                # This could include network monitoring, disk usage, etc.
+                time.sleep(0.1)  # Prevent busy waiting
+            except Exception as e:
+                self.get_logger().error(f'Background monitoring error: {e}')
+
+    def track_component_performance(self, component_name: str, execution_time: float):
+        """Track performance of specific components"""
+        if component_name not in self.component_times:
+            self.component_times[component_name] = deque(maxlen=50)
+            self.component_calls[component_name] = 0
+
+        self.component_times[component_name].append(execution_time)
+        self.component_calls[component_name] += 1
+
+        # Log if component is slow
+        avg_time = sum(self.component_times[component_name]) / len(self.component_times[component_name])
+        if avg_time > 0.1:  # More than 100ms average
+            self.get_logger().warn(f'Slow component {component_name}: avg {avg_time:.3f}s')
+
+    def get_performance_report(self) -> str:
+        """Generate performance report"""
+        report = {
+            'system': {
+                'cpu_avg': sum(self.cpu_usage_history) / len(self.cpu_usage_history) if self.cpu_usage_history else 0,
+                'memory_avg': sum(self.memory_usage_history) / len(self.memory_usage_history) if self.memory_usage_history else 0,
+                'processes_avg': sum(self.process_count_history) / len(self.process_count_history) if self.process_count_history else 0
+            },
+            'components': {}
+        }
+
+        for comp, times in self.component_times.items():
+            if times:
+                avg_time = sum(times) / len(times)
+                report['components'][comp] = {
+                    'avg_time': avg_time,
+                    'call_count': self.component_calls[comp],
+                    'max_time': max(times)
+                }
+
+        return str(report)
+
+    def publish_performance_report(self):
+        """Publish performance report"""
+        report = self.get_performance_report()
+        report_msg = String()
+        report_msg.data = report
+        self.performance_publisher.publish(report_msg)
+```
+
+## Testing and Validation Framework
+
+### System Integration Tests
+
+```python
+# Integration testing for the complete autonomous humanoid system
+import unittest
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import LaserScan
+from rclpy.action import ActionClient
+from rclpy.qos import QoSProfile
+import time
+import threading
+
+class AutonomousHumanoidTestSuite(unittest.TestCase):
+    def setUp(self):
+        """Set up test environment"""
+        rclpy.init()
+        self.node = TestNode('autonomous_humanoid_tester')
+
+        # Create clients and subscribers for testing
+        self.status_subscriber = self.node.create_subscription(
+            String, 'system_status', self.status_callback, 10
+        )
+
+        self.cmd_vel_publisher = self.node.create_publisher(Twist, 'cmd_vel', 10)
+        self.goal_publisher = self.node.create_publisher(String, 'high_level_goal', 10)
+
+        self.current_status = None
+        self.status_received = threading.Event()
+
+    def status_callback(self, msg):
+        """Callback for system status"""
+        self.current_status = msg.data
+        self.status_received.set()
+
+    def test_basic_navigation(self):
+        """Test basic navigation functionality"""
+        # Publish a simple navigation goal
+        goal_msg = String()
+        goal_msg.data = "go to kitchen"
+        self.goal_publisher.publish(goal_msg)
+
+        # Wait for system to change state
+        self.status_received.wait(timeout=10.0)
+
+        # Check that system is in planning or executing state
+        self.assertIsNotNone(self.current_status)
+        self.assertIn("STATE_CHANGE", self.current_status)
+
+    def test_voice_command_processing(self):
+        """Test voice command processing"""
+        # Simulate voice command
+        voice_cmd_publisher = self.node.create_publisher(String, 'voice_command', 10)
+
+        cmd_msg = String()
+        cmd_msg.data = "move forward slowly"
+        voice_cmd_publisher.publish(cmd_msg)
+
+        # Check for appropriate response
+        self.status_received.wait(timeout=5.0)
+        self.assertIsNotNone(self.current_status)
+
+    def test_emergency_stop(self):
+        """Test emergency stop functionality"""
+        # Publish emergency stop command
+        # This would be tested with simulated sensor data
+        pass
+
+    def test_sensor_integration(self):
+        """Test sensor data integration"""
+        # Simulate sensor data
+        scan_publisher = self.node.create_publisher(LaserScan, 'scan', 10)
+
+        scan_msg = LaserScan()
+        scan_msg.ranges = [1.0] * 360  # Simulated laser scan
+        scan_msg.angle_min = -3.14
+        scan_msg.angle_max = 3.14
+        scan_msg.angle_increment = 3.14 * 2 / 360
+        scan_publisher.publish(scan_msg)
+
+        # Verify system processes sensor data
+        time.sleep(0.1)  # Allow processing time
+        # Add assertions based on expected behavior
+
+    def tearDown(self):
+        """Clean up after tests"""
+        self.node.destroy_node()
+        rclpy.shutdown()
+
+class TestNode(Node):
+    def __init__(self, name):
+        super().__init__(name)
+
+def run_integration_tests():
+    """Run the complete integration test suite"""
+    test_suite = unittest.TestLoader().loadTestsFromTestCase(AutonomousHumanoidTestSuite)
+    test_runner = unittest.TextTestRunner(verbosity=2)
+    result = test_runner.run(test_suite)
+
+    return result.wasSuccessful()
+
+if __name__ == '__main__':
+    success = run_integration_tests()
+    exit(0 if success else 1)
+```
+
+## Deployment and Maintenance
+
+### System Deployment Scripts
+
+```bash
+#!/bin/bash
+# Deployment script for autonomous humanoid system
+
+set -e  # Exit on any error
+
+# Configuration
+ROS_DISTRO="humble"
+SYSTEM_NAME="autonomous_humanoid"
+USER_NAME=$(whoami)
+
+echo "Deploying Autonomous Humanoid System..."
+
+# Check prerequisites
+if ! command -v ros2 &> /dev/null; then
+    echo "ROS 2 is not installed. Please install ROS 2 ${ROS_DISTRO} first."
+    exit 1
+fi
+
+if ! command -v docker &> /dev/null; then
+    echo "Docker is not installed. Installing Docker..."
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sh get-docker.sh
+    sudo usermod -aG docker $USER_NAME
+fi
+
+# Create workspace
+if [ ! -d "autonomous_humanoid_ws" ]; then
+    mkdir -p autonomous_humanoid_ws/src
+    cd autonomous_humanoid_ws
+else
+    cd autonomous_humanoid_ws
+fi
+
+# Build the system
+echo "Building autonomous humanoid system..."
+colcon build --packages-select autonomous_humanoid --symlink-install
+
+# Source the workspace
+source install/setup.bash
+
+# Install Python dependencies
+pip3 install -r src/autonomous_humanoid/requirements.txt
+
+# Set up system services
+echo "Setting up system services..."
+
+# Create systemd service for main system
+cat > /tmp/autonomous_humanoid.service << EOF
+[Unit]
+Description=Autonomous Humanoid System
+After=network.target
+
+[Service]
+Type=simple
+User=$USER_NAME
+WorkingDirectory=/home/$USER_NAME/autonomous_humanoid_ws
+Environment="ROS_DOMAIN_ID=0"
+ExecStart=/home/$USER_NAME/autonomous_humanoid_ws/install/autonomous_humanoid/lib/autonomous_humanoid/system_orchestrator
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo cp /tmp/autonomous_humanoid.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable autonomous_humanoid.service
+
+echo "Deployment complete!"
+echo "To start the system: sudo systemctl start autonomous_humanoid"
+echo "To check status: sudo systemctl status autonomous_humanoid"
+echo "To view logs: journalctl -u autonomous_humanoid -f"
+```
+
+## Troubleshooting and Debugging
+
+### Common Issues and Solutions
+
+```python
+# Troubleshooting guide and diagnostic tools
+class AutonomousHumanoidDiagnostics:
+    """
+    Diagnostic tools and troubleshooting guide for the autonomous humanoid system
+    """
+
+    @staticmethod
+    def check_ros_communication():
+        """Check ROS communication between nodes"""
+        import subprocess
+        try:
+            # Check if ROS master is running
+            result = subprocess.run(['ros2', 'node', 'list'], capture_output=True, text=True)
+            if result.returncode == 0:
+                nodes = result.stdout.strip().split('\n')
+                print(f"Active ROS nodes: {len(nodes)}")
+                for node in nodes:
+                    print(f"  - {node}")
+                return True
+            else:
+                print("ROS communication issue detected")
+                return False
+        except Exception as e:
+            print(f"Error checking ROS communication: {e}")
+            return False
+
+    @staticmethod
+    def check_sensor_data():
+        """Check if sensor data is being received properly"""
+        # This would check actual sensor topics
+        # For this example, return a mock check
+        print("Checking sensor data streams...")
+        print("✓ Camera stream: Active")
+        print("✓ LiDAR stream: Active")
+        print("✓ IMU stream: Active")
+        print("✓ Joint states: Active")
+        return True
+
+    @staticmethod
+    def check_llm_connection():
+        """Check LLM API connection"""
+        try:
+            import openai
+            # Test API key validity
+            client = openai.OpenAI()
+            # Make a simple test call
+            client.models.list()
+            print("✓ LLM API connection: Active")
+            return True
+        except Exception as e:
+            print(f"✗ LLM API connection: Failed - {e}")
+            return False
+
+    @staticmethod
+    def check_system_resources():
+        """Check system resource usage"""
+        import psutil
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory_percent = psutil.virtual_memory().percent
+        disk_percent = psutil.disk_usage('/').percent
+
+        print(f"System Resources:")
+        print(f"  CPU: {cpu_percent}%")
+        print(f"  Memory: {memory_percent}%")
+        print(f"  Disk: {disk_percent}%")
+
+        if cpu_percent > 90 or memory_percent > 90:
+            print("⚠️  High resource usage detected!")
+            return False
+        return True
+
+    @staticmethod
+    def run_comprehensive_diagnostics():
+        """Run comprehensive system diagnostics"""
+        print("Running comprehensive diagnostics...")
+        print("=" * 50)
+
+        checks = [
+            ("ROS Communication", AutonomousHumanoidDiagnostics.check_ros_communication),
+            ("Sensor Data", AutonomousHumanoidDiagnostics.check_sensor_data),
+            ("LLM Connection", AutonomousHumanoidDiagnostics.check_llm_connection),
+            ("System Resources", AutonomousHumanoidDiagnostics.check_system_resources),
+        ]
+
+        results = {}
+        for name, check_func in checks:
+            print(f"\n{name}:")
+            try:
+                result = check_func()
+                results[name] = result
+                status = "✓ PASS" if result else "✗ FAIL"
+                print(f"  Status: {status}")
+            except Exception as e:
+                results[name] = False
+                print(f"  Status: ✗ ERROR - {e}")
+
+        print("\n" + "=" * 50)
+        print("Diagnostics Summary:")
+        passed = sum(1 for result in results.values() if result)
+        total = len(results)
+        print(f"Passed: {passed}/{total}")
+
+        if passed == total:
+            print("✓ All systems nominal!")
+        else:
+            print("⚠️  Some systems require attention!")
+
+        return passed == total
+
+# Common troubleshooting commands
+"""
+# Check system status
+ros2 launch autonomous_humanoid bringup_launch.py
+
+# View system logs
+journalctl -u autonomous_humanoid -f
+
+# Check network connectivity
+ping -c 3 api.openai.com
+
+# Check sensor data
+ros2 topic echo /scan --field ranges[0]
+ros2 topic echo /camera/image_raw --field height
+
+# Check system resources
+htop
+df -h
+free -h
+
+# Reset emergency stop
+ros2 topic pub /emergency_stop std_msgs/Bool "{data: false}"
+
+# Run diagnostics
+python3 -c "from diagnostic_tools import AutonomousHumanoidDiagnostics; AutonomousHumanoidDiagnostics.run_comprehensive_diagnostics()"
+"""
+```
+
+## RAG Summary
+
+The complete autonomous humanoid pipeline integrates all modules from the Physical AI & Humanoid Robotics book into a unified system. The architecture combines perception, cognition, and action layers with voice interaction and multimodal capabilities. The system includes comprehensive safety monitoring, performance optimization, and deployment considerations. The pipeline demonstrates the complete flow from voice commands to physical robot actions, incorporating ROS 2 fundamentals, simulation environments, perception systems, and Vision-Language-Action capabilities.
+
+## Knowledge Check
+
+1. What are the key components of the complete autonomous humanoid system?
+2. How does the system orchestrator coordinate different subsystems?
+3. What safety mechanisms are implemented in the autonomous system?
+4. How is the system optimized for real-world deployment?
+5. What diagnostic and troubleshooting tools are available?
+
+## Next Steps
+
+With the completion of this capstone chapter, you have learned the complete pipeline for autonomous humanoid robotics:
+- ROS 2 fundamentals for robot communication
+- Simulation environments for testing and training
+- Perception systems for environment understanding
+- Cognitive planning with LLMs
+- Voice interaction with Whisper
+- Complete system integration and deployment
+
+This completes the Physical AI & Humanoid Robotics textbook, providing you with comprehensive knowledge to build and deploy autonomous humanoid robots.

@@ -1,0 +1,27 @@
+{
+  "id": "modules/module-2-digital-twin/index",
+  "title": "Module 2: Digital Twin (Gazebo & Unity)",
+  "description": "Welcome to Module 2 of the Physical AI & Humanoid Robotics book. This module explores digital twin concepts using simulation environments, focusing on physics simulation, sensor modeling, and high-fidelity rendering.",
+  "source": "@site/docs/modules/module-2-digital-twin/index.md",
+  "sourceDirName": "modules/module-2-digital-twin",
+  "slug": "/modules/module-2-digital-twin/",
+  "permalink": "/docs/modules/module-2-digital-twin/",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/docs/modules/module-2-digital-twin/index.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "URDF Basics for Humanoid Robots",
+    "permalink": "/docs/modules/module-1-ros2/urdf-humanoid"
+  },
+  "next": {
+    "title": "Gazebo Physics: Gravity, Collisions",
+    "permalink": "/docs/modules/module-2-digital-twin/gazebo-physics"
+  }
+}

@@ -1,0 +1,1295 @@
+---
+sidebar_label: 'Cognitive Planning (LLMs → ROS 2 actions)'
+sidebar_position: 2
+---
+
+# Cognitive Planning (LLMs → ROS 2 actions)
+
+## Introduction
+
+Large Language Models (LLMs) enable sophisticated cognitive planning for humanoid robots by translating high-level goals and natural language commands into executable ROS 2 action sequences. This chapter explores how to integrate LLMs like GPT, Claude, or open-source alternatives into robotic systems for intelligent task planning and execution.
+
+## LLM Integration Architecture
+
+### Cognitive Planning Pipeline
+
+The cognitive planning system creates a pipeline from high-level goals to low-level actions:
+
+1. **Goal Input**: Natural language goals or commands
+2. **Semantic Understanding**: LLM interpretation of goals
+3. **Task Decomposition**: Breaking goals into subtasks
+4. **Action Mapping**: Converting subtasks to ROS 2 actions
+5. **Execution Planning**: Sequencing and scheduling actions
+6. **Feedback Integration**: Updating plan based on execution results
+
+### Core Components
+
+```python
+# Example cognitive planning system architecture
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from action_msgs.msg import GoalStatus
+from rclpy.action import ActionClient
+from rclpy.callback_groups import ReentrantCallbackGroup
+import openai
+import json
+import asyncio
+from typing import Dict, List, Any, Optional
+
+class CognitivePlanningNode(Node):
+    def __init__(self):
+        super().__init__('cognitive_planning_node')
+
+        # LLM configuration
+        self.declare_parameter('llm_model', 'gpt-3.5-turbo')
+        self.declare_parameter('openai_api_key', '')
+        self.declare_parameter('max_tokens', 1000)
+
+        self.llm_model = self.get_parameter('llm_model').value
+        self.openai_api_key = self.get_parameter('openai_api_key').value
+        self.max_tokens = self.get_parameter('max_tokens').value
+
+        # Initialize OpenAI client
+        openai.api_key = self.openai_api_key
+        self.client = openai.OpenAI(api_key=self.openai_api_key)
+
+        # Publishers and subscriptions
+        self.goal_subscription = self.create_subscription(
+            String,
+            'high_level_goal',
+            self.goal_callback,
+            10
+        )
+
+        self.plan_publisher = self.create_publisher(
+            String,
+            'action_plan',
+            10
+        )
+
+        self.status_publisher = self.create_publisher(
+            String,
+            'planning_status',
+            10
+        )
+
+        # Action clients for different robot capabilities
+        self.action_clients = {
+            'navigation': ActionClient(self, 'nav2_msgs.action.NavigateToPose', 'navigate_to_pose'),
+            'arm_manipulation': ActionClient(self, 'control_msgs.action.FollowJointTrajectory', 'arm_controller/follow_joint_trajectory'),
+            'gripper': ActionClient(self, 'control_msgs.action.GripperCommand', 'gripper_controller/gripper_cmd'),
+            'speech': ActionClient(self, 'tts_msgs.action.SynthesizeSpeech', 'text_to_speech/synthesize_speech')
+        }
+
+        # Robot state and capabilities
+        self.robot_capabilities = self.initialize_robot_capabilities()
+        self.current_plan = None
+        self.plan_execution_active = False
+
+    def initialize_robot_capabilities(self) -> Dict[str, Any]:
+        """Initialize robot capabilities for LLM planning"""
+        return {
+            'navigation': {
+                'supported': True,
+                'range': 'unlimited',
+                'precision': '0.1m',
+                'actions': ['move_to', 'go_to', 'navigate_to', 'approach']
+            },
+            'manipulation': {
+                'supported': True,
+                'reach': '1.0m',
+                'payload': '5kg',
+                'actions': ['pick', 'place', 'grasp', 'release', 'move_object']
+            },
+            'perception': {
+                'supported': True,
+                'range': '10m',
+                'actions': ['detect', 'identify', 'recognize', 'find', 'locate']
+            },
+            'communication': {
+                'supported': True,
+                'actions': ['speak', 'say', 'tell', 'announce']
+            }
+        }
+
+    async def plan_with_llm(self, goal: str) -> Optional[List[Dict[str, Any]]]:
+        """Generate action plan using LLM"""
+        system_prompt = f"""
+        You are a cognitive planning assistant for a humanoid robot. Your role is to decompose high-level goals into executable action sequences.
+
+        Robot capabilities:
+        {json.dumps(self.robot_capabilities, indent=2)}
+
+        Available ROS 2 action types:
+        - navigation: move_to(location), go_to(x, y, theta)
+        - manipulation: pick(object), place(object, location), grasp(object), release()
+        - perception: detect(object), identify(object), recognize(object), find(object), locate(object)
+        - communication: speak(text)
+
+        Output format: Return a JSON list of actions, each with:
+        {{
+            "action_type": "navigation|manipulation|perception|communication",
+            "action_name": "specific action",
+            "parameters": {{"param1": "value1", ...}},
+            "description": "Human-readable description"
+        }}
+
+        Rules:
+        1. Only use actions that match robot capabilities
+        2. Ensure action sequence is logical and executable
+        3. Include necessary perception actions before manipulation
+        4. Add communication actions for user feedback when appropriate
+        """
+
+        user_prompt = f"Goal: {goal}\n\nGenerate a detailed action plan:"
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.llm_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=self.max_tokens,
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+
+            # Extract and parse the plan
+            plan_text = response.choices[0].message.content
+            plan_json = json.loads(plan_text)
+
+            if 'actions' in plan_json:
+                return plan_json['actions']
+            else:
+                return plan_json  # If the response is already a list
+
+        except Exception as e:
+            self.get_logger().error(f'LLM planning error: {e}')
+            return None
+
+    def goal_callback(self, msg: String):
+        """Process high-level goal"""
+        goal = msg.data
+        self.get_logger().info(f'Received high-level goal: {goal}')
+
+        # Publish planning status
+        status_msg = String()
+        status_msg.data = f'Planning for goal: {goal}'
+        self.status_publisher.publish(status_msg)
+
+        # Plan asynchronously
+        asyncio.create_task(self.execute_planning_workflow(goal))
+
+    async def execute_planning_workflow(self, goal: str):
+        """Execute the complete planning and execution workflow"""
+        # Generate plan with LLM
+        plan = await self.plan_with_llm(goal)
+
+        if not plan:
+            self.get_logger().error('Failed to generate plan')
+            return
+
+        # Publish the plan
+        plan_msg = String()
+        plan_msg.data = json.dumps(plan, indent=2)
+        self.plan_publisher.publish(plan_msg)
+
+        self.get_logger().info(f'Generated plan with {len(plan)} actions')
+
+        # Execute the plan
+        await self.execute_plan(plan)
+
+    async def execute_plan(self, plan: List[Dict[str, Any]]):
+        """Execute the action plan"""
+        self.plan_execution_active = True
+        self.current_plan = plan
+
+        for i, action in enumerate(plan):
+            if not self.plan_execution_active:
+                self.get_logger().info('Plan execution cancelled')
+                break
+
+            self.get_logger().info(f'Executing action {i+1}/{len(plan)}: {action["action_name"]}')
+
+            success = await self.execute_single_action(action)
+
+            if not success:
+                self.get_logger().error(f'Action failed: {action["action_name"]}')
+                # Implement recovery strategies here
+                break
+
+        self.plan_execution_active = False
+        self.current_plan = None
+
+    async def execute_single_action(self, action: Dict[str, Any]) -> bool:
+        """Execute a single action"""
+        action_type = action['action_type']
+        action_name = action['action_name']
+        parameters = action.get('parameters', {})
+
+        if action_type == 'navigation':
+            return await self.execute_navigation_action(action_name, parameters)
+        elif action_type == 'manipulation':
+            return await self.execute_manipulation_action(action_name, parameters)
+        elif action_type == 'perception':
+            return await self.execute_perception_action(action_name, parameters)
+        elif action_type == 'communication':
+            return await self.execute_communication_action(action_name, parameters)
+        else:
+            self.get_logger().error(f'Unknown action type: {action_type}')
+            return False
+
+    async def execute_navigation_action(self, action_name: str, parameters: Dict[str, Any]) -> bool:
+        """Execute navigation action"""
+        # Example: move_to(location) or go_to(x, y, theta)
+        if action_name == 'move_to' or action_name == 'go_to':
+            x = parameters.get('x', 0.0)
+            y = parameters.get('y', 0.0)
+            theta = parameters.get('theta', 0.0)
+
+            # Create navigation goal
+            from geometry_msgs.msg import PoseStamped
+            from nav2_msgs.action import NavigateToPose
+
+            goal_msg = NavigateToPose.Goal()
+            goal_msg.pose.header.frame_id = 'map'
+            goal_msg.pose.pose.position.x = float(x)
+            goal_msg.pose.pose.position.y = float(y)
+            goal_msg.pose.pose.position.z = 0.0
+
+            # Convert theta to quaternion (simplified)
+            from math import sin, cos
+            goal_msg.pose.pose.orientation.z = sin(theta / 2.0)
+            goal_msg.pose.pose.orientation.w = cos(theta / 2.0)
+
+            # Send navigation goal
+            if 'navigation' in self.action_clients:
+                client = self.action_clients['navigation']
+                if client.wait_for_server(timeout_sec=5.0):
+                    future = client.send_goal_async(goal_msg)
+                    result = await future
+                    return result.status == GoalStatus.STATUS_SUCCEEDED
+
+        return False
+```
+
+## Context-Aware Planning
+
+### Maintaining World State
+
+```python
+# Example of context-aware planning with world state
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from sensor_msgs.msg import LaserScan, Image
+from geometry_msgs.msg import PoseStamped
+from typing import Dict, Any, List
+import json
+
+class ContextAwarePlanningNode(Node):
+    def __init__(self):
+        super().__init__('context_aware_planning')
+
+        # Initialize world state
+        self.world_state = {
+            'robot_pose': {'x': 0.0, 'y': 0.0, 'theta': 0.0},
+            'objects': {},  # object_name: {'position': {'x': x, 'y': y}, 'type': 'type'}
+            'locations': {},  # location_name: {'x': x, 'y': y}
+            'robot_status': 'idle',
+            'battery_level': 100.0,
+            'current_task': None
+        }
+
+        # Subscriptions for context updates
+        self.pose_subscription = self.create_subscription(
+            PoseStamped,
+            'robot_pose',
+            self.pose_callback,
+            10
+        )
+
+        self.scan_subscription = self.create_subscription(
+            LaserScan,
+            'scan',
+            self.scan_callback,
+            10
+        )
+
+        self.object_subscription = self.create_subscription(
+            String,
+            'detected_objects',
+            self.object_callback,
+            10
+        )
+
+        # Goal processing
+        self.goal_subscription = self.create_subscription(
+            String,
+            'high_level_goal',
+            self.contextual_goal_callback,
+            10
+        )
+
+        self.plan_publisher = self.create_publisher(String, 'contextual_action_plan', 10)
+
+    def pose_callback(self, msg: PoseStamped):
+        """Update robot pose in world state"""
+        self.world_state['robot_pose'] = {
+            'x': msg.pose.position.x,
+            'y': msg.pose.position.y,
+            'theta': self.quaternion_to_yaw(msg.pose.orientation)
+        }
+
+    def scan_callback(self, msg: LaserScan):
+        """Process laser scan for obstacle information"""
+        # Update world state with obstacle information
+        # This is a simplified example
+        pass
+
+    def object_callback(self, msg: String):
+        """Process detected objects"""
+        try:
+            detected_objects = json.loads(msg.data)
+            for obj in detected_objects:
+                self.world_state['objects'][obj['name']] = {
+                    'position': obj['position'],
+                    'type': obj['type'],
+                    'confidence': obj['confidence']
+                }
+        except json.JSONDecodeError:
+            self.get_logger().error('Failed to parse detected objects')
+
+    def contextual_goal_callback(self, msg: String):
+        """Process goal with context awareness"""
+        goal = msg.data
+        self.get_logger().info(f'Received contextual goal: {goal}')
+
+        # Generate contextual plan
+        plan = self.generate_contextual_plan(goal)
+
+        if plan:
+            plan_msg = String()
+            plan_msg.data = json.dumps(plan, indent=2)
+            self.plan_publisher.publish(plan_msg)
+
+    def generate_contextual_plan(self, goal: str) -> List[Dict[str, Any]]:
+        """Generate plan considering current context"""
+        # Use LLM with context for planning
+        system_prompt = f"""
+        You are a context-aware planning assistant for a humanoid robot.
+
+        Current world state:
+        {json.dumps(self.world_state, indent=2)}
+
+        Available actions:
+        - navigation: move_to(location), go_to(x, y, theta)
+        - manipulation: pick(object), place(object, location), grasp(object), release()
+        - perception: detect(object), identify(object), recognize(object), find(object), locate(object)
+        - communication: speak(text)
+
+        Generate an action plan that considers the current world state.
+        """
+
+        user_prompt = f"Goal: {goal}\n\nGenerate a context-aware action plan:"
+
+        # In a real implementation, this would call the LLM
+        # For this example, we'll return a mock plan
+        return [
+            {
+                "action_type": "perception",
+                "action_name": "detect",
+                "parameters": {"object": "target"},
+                "description": "Detect the target object in the environment"
+            },
+            {
+                "action_type": "navigation",
+                "action_name": "go_to",
+                "parameters": {"x": 1.0, "y": 1.0, "theta": 0.0},
+                "description": "Navigate to the target location"
+            }
+        ]
+
+    def quaternion_to_yaw(self, orientation):
+        """Convert quaternion to yaw angle"""
+        import math
+        siny_cosp = 2 * (orientation.w * orientation.z + orientation.x * orientation.y)
+        cosy_cosp = 1 - 2 * (orientation.y * orientation.y + orientation.z * orientation.z)
+        return math.atan2(siny_cosp, cosy_cosp)
+```
+
+## Multi-Modal Integration
+
+### Combining LLM with Perception
+
+```python
+# Example of multi-modal planning with perception integration
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image, CameraInfo
+from std_msgs.msg import String
+from cv_bridge import CvBridge
+import cv2
+import numpy as np
+import base64
+from io import BytesIO
+
+class MultiModalPlanningNode(Node):
+    def __init__(self):
+        super().__init__('multi_modal_planning')
+
+        # Initialize CV bridge
+        self.cv_bridge = CvBridge()
+
+        # Subscriptions for multi-modal input
+        self.image_subscription = self.create_subscription(
+            Image,
+            'camera/image_raw',
+            self.image_callback,
+            10
+        )
+
+        self.goal_subscription = self.create_subscription(
+            String,
+            'high_level_goal',
+            self.multi_modal_goal_callback,
+            10
+        )
+
+        self.plan_publisher = self.create_publisher(String, 'multi_modal_plan', 10)
+
+        # Store latest image for planning context
+        self.latest_image = None
+        self.latest_image_timestamp = None
+
+    def image_callback(self, msg: Image):
+        """Process incoming image"""
+        try:
+            cv_image = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            self.latest_image = cv_image
+            self.latest_image_timestamp = msg.header.stamp
+        except Exception as e:
+            self.get_logger().error(f'Image conversion error: {e}')
+
+    def multi_modal_goal_callback(self, msg: String):
+        """Process goal with multi-modal context"""
+        goal = msg.data
+        self.get_logger().info(f'Received multi-modal goal: {goal}')
+
+        # Encode latest image for LLM context
+        image_b64 = None
+        if self.latest_image is not None:
+            # Convert image to base64 for LLM
+            _, buffer = cv2.imencode('.jpg', self.latest_image)
+            image_b64 = base64.b64encode(buffer).decode('utf-8')
+
+        # Generate plan with both text and visual context
+        plan = self.generate_multi_modal_plan(goal, image_b64)
+
+        if plan:
+            plan_msg = String()
+            plan_msg.data = json.dumps(plan, indent=2)
+            self.plan_publisher.publish(plan_msg)
+
+    def generate_multi_modal_plan(self, goal: str, image_b64: str) -> List[Dict[str, Any]]:
+        """Generate plan using both text and visual context"""
+        if image_b64:
+            # This would use a multi-modal LLM like GPT-4 Vision
+            # For this example, we'll simulate the process
+            system_prompt = f"""
+            You are a multi-modal planning assistant. The user has provided both a text goal and a visual context.
+
+            Text goal: {goal}
+
+            Visual context: The image shows the current environment from the robot's perspective.
+
+            Generate an action plan considering both the text goal and visual information.
+            """
+
+            # In a real implementation, this would call a multi-modal LLM
+            # For now, return a mock plan
+            return [
+                {
+                    "action_type": "perception",
+                    "action_name": "analyze_image",
+                    "parameters": {"image_context": "visual_analysis_performed"},
+                    "description": "Analyzed the visual context to understand the environment"
+                },
+                {
+                    "action_type": "navigation",
+                    "action_name": "move_to_safe_location",
+                    "parameters": {"x": 2.0, "y": 2.0, "theta": 0.0},
+                    "description": "Moved to a safe location based on visual analysis"
+                }
+            ]
+        else:
+            # Fall back to text-only planning
+            return [
+                {
+                    "action_type": "navigation",
+                    "action_name": "explore",
+                    "parameters": {"area": "unknown"},
+                    "description": "Exploring unknown area to gather visual information"
+                }
+            ]
+```
+
+## Task and Motion Planning Integration
+
+### Combining High-Level Planning with Low-Level Control
+
+```python
+# Example of task and motion planning integration
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from geometry_msgs.msg import Pose, Point
+from moveit_msgs.msg import MoveItErrorCodes
+from moveit_msgs.srv import GetMotionPlan
+from trajectory_msgs.msg import JointTrajectory
+from sensor_msgs.msg import JointState
+
+class TaskMotionPlanningNode(Node):
+    def __init__(self):
+        super().__init__('task_motion_planning')
+
+        # Initialize MoveIt interface
+        self.moveit_client = self.create_client(
+            GetMotionPlan,
+            'plan_kinematic_path'
+        )
+
+        # LLM planning integration
+        self.goal_subscription = self.create_subscription(
+            String,
+            'high_level_goal',
+            self.task_motion_goal_callback,
+            10
+        )
+
+        self.trajectory_publisher = self.create_publisher(
+            JointTrajectory,
+            'joint_trajectory',
+            10
+        )
+
+        # Robot state
+        self.joint_state_subscription = self.create_subscription(
+            JointState,
+            'joint_states',
+            self.joint_state_callback,
+            10
+        )
+
+        self.current_joint_positions = {}
+
+    def joint_state_callback(self, msg: JointState):
+        """Update current joint positions"""
+        for i, name in enumerate(msg.name):
+            self.current_joint_positions[name] = msg.position[i]
+
+    def task_motion_goal_callback(self, msg: String):
+        """Process goal requiring both task and motion planning"""
+        goal = msg.data
+        self.get_logger().info(f'Received task-motion goal: {goal}')
+
+        # First, use LLM to decompose the task
+        task_plan = self.decompose_task_with_llm(goal)
+
+        # Then, for each manipulation task, plan the motion
+        for task in task_plan:
+            if task['action_type'] == 'manipulation':
+                trajectory = self.plan_manipulation_motion(task)
+                if trajectory:
+                    self.execute_trajectory(trajectory)
+
+    def decompose_task_with_llm(self, goal: str) -> List[Dict[str, Any]]:
+        """Decompose high-level goal into subtasks using LLM"""
+        system_prompt = """
+        Decompose the high-level goal into specific subtasks that can be executed by a robot.
+        Each subtask should be specific enough for motion planning.
+
+        Subtask format:
+        {
+            "action_type": "navigation|manipulation|perception",
+            "action_name": "specific action",
+            "parameters": {
+                "target_pose": {"x": x, "y": y, "z": z, "qx": qx, "qy": qy, "qz": qz, "qw": qw},
+                "joint_targets": {"joint_name": position, ...},
+                "object_name": "name"
+            },
+            "description": "What this subtask achieves"
+        }
+        """
+
+        user_prompt = f"Goal: {goal}\n\nDecompose into executable subtasks:"
+
+        # In a real implementation, this would call the LLM
+        # For this example, return a mock plan
+        return [
+            {
+                "action_type": "navigation",
+                "action_name": "move_to_object",
+                "parameters": {
+                    "target_pose": {"x": 1.0, "y": 0.5, "z": 0.0, "qx": 0.0, "qy": 0.0, "qz": 0.0, "qw": 1.0}
+                },
+                "description": "Move to position near the object to be manipulated"
+            },
+            {
+                "action_type": "manipulation",
+                "action_name": "grasp_object",
+                "parameters": {
+                    "target_pose": {"x": 1.0, "y": 0.5, "z": 0.8, "qx": 0.0, "qy": 0.0, "qz": 0.0, "qw": 1.0},
+                    "joint_targets": {"gripper_joint": 0.5}
+                },
+                "description": "Grasp the target object"
+            }
+        ]
+
+    def plan_manipulation_motion(self, task: Dict[str, Any]) -> Optional[JointTrajectory]:
+        """Plan motion for manipulation task"""
+        if 'target_pose' in task['parameters']:
+            target_pose = task['parameters']['target_pose']
+
+            # Create motion planning request
+            # In a real implementation, this would use MoveIt
+            # For this example, return a mock trajectory
+            trajectory = JointTrajectory()
+            trajectory.joint_names = ['joint1', 'joint2', 'joint3', 'gripper_joint']
+
+            # Create trajectory points
+            point = JointTrajectoryPoint()
+            point.positions = [0.0, 0.0, 0.0, 0.0]  # Starting position
+            point.time_from_start.sec = 1
+            trajectory.points.append(point)
+
+            # Add target position (this would be calculated by motion planner)
+            target_point = JointTrajectoryPoint()
+            target_point.positions = [1.0, 0.5, 0.3, 0.5]  # Example target
+            target_point.time_from_start.sec = 3
+            trajectory.points.append(target_point)
+
+            return trajectory
+
+        return None
+
+    def execute_trajectory(self, trajectory: JointTrajectory):
+        """Execute the planned trajectory"""
+        self.trajectory_publisher.publish(trajectory)
+        self.get_logger().info('Published trajectory for execution')
+```
+
+## Error Handling and Recovery
+
+### Robust Planning with Error Recovery
+
+```python
+# Example of error handling and recovery in LLM-based planning
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from action_msgs.msg import GoalStatus
+from rclpy.action import ActionClient
+from typing import Dict, List, Any, Optional
+import random
+
+class RobustPlanningNode(Node):
+    def __init__(self):
+        super().__init__('robust_planning')
+
+        # Initialize with error handling
+        self.goal_subscription = self.create_subscription(
+            String,
+            'high_level_goal',
+            self.robust_goal_callback,
+            10
+        )
+
+        self.status_publisher = self.create_publisher(String, 'planning_status', 10)
+        self.recovery_publisher = self.create_publisher(String, 'recovery_actions', 10)
+
+        # Action clients with error handling
+        self.action_clients = {}
+
+        # Recovery strategies
+        self.recovery_strategies = {
+            'navigation_failure': [
+                'try_alternative_path',
+                'request_human_assistance',
+                'return_to_known_location'
+            ],
+            'manipulation_failure': [
+                'reposition_robot',
+                'retry_with_different_approach',
+                'request_human_intervention'
+            ],
+            'perception_failure': [
+                'change_sensor_mode',
+                'move_to_better_viewpoint',
+                'request_human_verification'
+            ]
+        }
+
+    def robust_goal_callback(self, msg: String):
+        """Process goal with robust error handling"""
+        goal = msg.data
+        self.get_logger().info(f'Received goal for robust planning: {goal}')
+
+        # Generate plan with error handling considerations
+        plan = self.generate_robust_plan(goal)
+
+        if plan:
+            # Execute plan with error monitoring
+            self.execute_plan_with_monitoring(plan)
+
+    def generate_robust_plan(self, goal: str) -> Optional[List[Dict[str, Any]]]:
+        """Generate plan with built-in error handling"""
+        # Use LLM to generate plan considering potential failure points
+        system_prompt = f"""
+        Generate a robust action plan that includes potential failure points and recovery strategies.
+
+        For each action, consider:
+        1. Potential failure modes
+        2. Conditions that might cause failure
+        3. Recovery strategies for each potential failure
+
+        Output format:
+        {{
+            "actions": [
+                {{
+                    "action_type": "type",
+                    "action_name": "name",
+                    "parameters": {{...}},
+                    "description": "description",
+                    "failure_modes": ["mode1", "mode2", ...],
+                    "recovery_strategies": ["strategy1", "strategy2", ...]
+                }}
+            ]
+        }}
+        """
+
+        user_prompt = f"Goal: {goal}\n\nGenerate robust action plan:"
+
+        # In a real implementation, this would call the LLM
+        # For this example, return a mock robust plan
+        return [
+            {
+                "action_type": "navigation",
+                "action_name": "move_to_kitchen",
+                "parameters": {"x": 5.0, "y": 3.0, "theta": 0.0},
+                "description": "Move to kitchen to fetch item",
+                "failure_modes": ["obstacle_detected", "localization_failure"],
+                "recovery_strategies": ["use_alternative_path", "relocalize"]
+            },
+            {
+                "action_type": "manipulation",
+                "action_name": "pick_up_cup",
+                "parameters": {"object": "cup", "approach": "top_down"},
+                "description": "Pick up the cup",
+                "failure_modes": ["grasp_failure", "object_not_found"],
+                "recovery_strategies": ["adjust_grasp", "search_alternative_objects"]
+            }
+        ]
+
+    def execute_plan_with_monitoring(self, plan: List[Dict[str, Any]]):
+        """Execute plan with monitoring and recovery"""
+        for i, action in enumerate(plan):
+            self.get_logger().info(f'Executing action {i+1}/{len(plan)}: {action["action_name"]}')
+
+            # Execute action and monitor for success/failure
+            success = self.execute_monitored_action(action)
+
+            if not success:
+                self.get_logger().warn(f'Action failed: {action["action_name"]}')
+
+                # Try recovery strategies
+                recovery_success = self.attempt_recovery(action)
+
+                if not recovery_success:
+                    self.get_logger().error(f'All recovery strategies failed for action: {action["action_name"]}')
+                    self.publish_status(f'Planning failed after recovery attempts for: {action["description"]}')
+                    return
+                else:
+                    self.get_logger().info(f'Recovery successful for action: {action["action_name"]}')
+
+        self.get_logger().info('Plan completed successfully')
+
+    def execute_monitored_action(self, action: Dict[str, Any]) -> bool:
+        """Execute action with monitoring"""
+        # Simulate action execution with potential for failure
+        # In a real implementation, this would execute the actual action
+        # and monitor its progress
+
+        # Simulate success/failure (in real system, check actual execution)
+        success_probability = 0.8  # 80% success rate for this example
+        return random.random() < success_probability
+
+    def attempt_recovery(self, failed_action: Dict[str, Any]) -> bool:
+        """Attempt recovery strategies for failed action"""
+        recovery_strategies = failed_action.get('recovery_strategies', [])
+
+        if not recovery_strategies:
+            self.get_logger().warn('No recovery strategies available for failed action')
+            return False
+
+        for strategy in recovery_strategies:
+            self.get_logger().info(f'Trying recovery strategy: {strategy}')
+
+            # Execute recovery strategy
+            strategy_success = self.execute_recovery_strategy(strategy, failed_action)
+
+            if strategy_success:
+                self.get_logger().info(f'Recovery strategy successful: {strategy}')
+                recovery_msg = String()
+                recovery_msg.data = f'Successfully recovered using strategy: {strategy}'
+                self.recovery_publisher.publish(recovery_msg)
+                return True
+            else:
+                self.get_logger().warn(f'Recovery strategy failed: {strategy}')
+
+        return False
+
+    def execute_recovery_strategy(self, strategy: str, failed_action: Dict[str, Any]) -> bool:
+        """Execute a specific recovery strategy"""
+        # Implement specific recovery strategies
+        if strategy == 'use_alternative_path':
+            # Implement alternative path navigation
+            return self.execute_alternative_navigation(failed_action)
+        elif strategy == 'relocalize':
+            # Implement relocalization
+            return self.execute_relocalization()
+        elif strategy == 'adjust_grasp':
+            # Implement grasp adjustment
+            return self.execute_grasp_adjustment(failed_action)
+        elif strategy == 'search_alternative_objects':
+            # Implement search for alternative objects
+            return self.execute_alternative_object_search(failed_action)
+        else:
+            self.get_logger().warn(f'Unknown recovery strategy: {strategy}')
+            return False
+
+    def execute_alternative_navigation(self, failed_action: Dict[str, Any]) -> bool:
+        """Execute alternative navigation strategy"""
+        # This would implement alternative path planning
+        # For this example, simulate success
+        self.get_logger().info('Executing alternative navigation')
+        return True
+
+    def execute_relocalization(self) -> bool:
+        """Execute relocalization strategy"""
+        # This would trigger robot relocalization
+        self.get_logger().info('Executing relocalization')
+        return True
+
+    def execute_grasp_adjustment(self, failed_action: Dict[str, Any]) -> bool:
+        """Execute grasp adjustment strategy"""
+        # This would adjust grasp parameters and retry
+        self.get_logger().info('Executing grasp adjustment')
+        return True
+
+    def execute_alternative_object_search(self, failed_action: Dict[str, Any]) -> bool:
+        """Execute search for alternative objects"""
+        # This would search for alternative objects to the target
+        self.get_logger().info('Executing alternative object search')
+        return True
+
+    def publish_status(self, status: str):
+        """Publish planning status"""
+        status_msg = String()
+        status_msg.data = status
+        self.status_publisher.publish(status_msg)
+```
+
+## Performance Optimization
+
+### Efficient LLM Integration
+
+```python
+# Example of performance optimization techniques
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from functools import lru_cache
+import threading
+import queue
+from typing import Optional
+
+class OptimizedLLMPlanningNode(Node):
+    def __init__(self):
+        super().__init__('optimized_llm_planning')
+
+        # Initialize with optimization considerations
+        self.declare_parameter('llm_cache_size', 100)
+        self.declare_parameter('max_concurrent_requests', 3)
+        self.declare_parameter('plan_timeout', 30.0)
+
+        self.cache_size = self.get_parameter('llm_cache_size').value
+        self.max_concurrent = self.get_parameter('max_concurrent_requests').value
+        self.plan_timeout = self.get_parameter('plan_timeout').value
+
+        # Caching for frequently requested plans
+        self.plan_cache = {}
+
+        # Request queue for managing LLM calls
+        self.request_queue = queue.Queue(maxsize=10)
+        self.response_queue = queue.Queue()
+
+        # Start LLM processing thread
+        self.llm_thread = threading.Thread(target=self.llm_processing_loop)
+        self.llm_thread.daemon = True
+        self.llm_thread.start()
+
+        # Goal processing
+        self.goal_subscription = self.create_subscription(
+            String,
+            'high_level_goal',
+            self.optimized_goal_callback,
+            10
+        )
+
+        self.plan_publisher = self.create_publisher(String, 'optimized_action_plan', 10)
+
+    @lru_cache(maxsize=100)
+    def get_cached_plan(self, goal: str, context: str = "") -> Optional[str]:
+        """Get cached plan if available"""
+        # This is a simplified cache; in practice, you'd hash the inputs
+        cache_key = f"{goal}_{context}"
+        return self.plan_cache.get(cache_key)
+
+    def set_cached_plan(self, goal: str, context: str, plan: str):
+        """Cache a plan"""
+        cache_key = f"{goal}_{context}"
+        if len(self.plan_cache) >= self.cache_size:
+            # Remove oldest entries
+            oldest_key = next(iter(self.plan_cache))
+            del self.plan_cache[oldest_key]
+        self.plan_cache[cache_key] = plan
+
+    def optimized_goal_callback(self, msg: String):
+        """Process goal with optimization"""
+        goal = msg.data
+
+        # Check cache first
+        cached_plan = self.get_cached_plan(goal)
+        if cached_plan:
+            self.get_logger().info('Using cached plan')
+            plan_msg = String()
+            plan_msg.data = cached_plan
+            self.plan_publisher.publish(plan_msg)
+            return
+
+        # Add to processing queue
+        try:
+            self.request_queue.put_nowait({
+                'goal': goal,
+                'timestamp': self.get_clock().now()
+            })
+            self.get_logger().info(f'Added goal to processing queue: {goal}')
+        except queue.Full:
+            self.get_logger().error('Request queue is full, dropping request')
+
+    def llm_processing_loop(self):
+        """Process LLM requests in a separate thread"""
+        while rclpy.ok():
+            try:
+                # Get request from queue
+                request = self.request_queue.get(timeout=1.0)
+
+                # Process with LLM
+                plan = self.process_with_llm(request['goal'])
+
+                if plan:
+                    # Cache the plan
+                    self.set_cached_plan(request['goal'], "", plan)
+
+                    # Publish result
+                    plan_msg = String()
+                    plan_msg.data = plan
+
+                    # Use call to publish from the processing thread
+                    # In ROS2, this would need to be handled differently
+                    # This is a simplified example
+
+            except queue.Empty:
+                continue  # Continue loop
+            except Exception as e:
+                self.get_logger().error(f'LLM processing error: {e}')
+                continue
+
+    def process_with_llm(self, goal: str) -> Optional[str]:
+        """Process goal with LLM"""
+        # This would call the actual LLM
+        # For this example, return a mock plan
+        import json
+        mock_plan = [
+            {
+                "action_type": "navigation",
+                "action_name": "go_to",
+                "parameters": {"x": 1.0, "y": 1.0, "theta": 0.0},
+                "description": "Move to specified location"
+            }
+        ]
+        return json.dumps(mock_plan)
+
+# Performance optimization summary
+"""
+LLM Performance Optimization for Robotics:
+
+1. Caching:
+   - Cache frequently requested plans
+   - Use LRU cache for memory management
+   - Consider semantic similarity for caching
+
+2. Request Management:
+   - Use queues to manage request flow
+   - Limit concurrent requests
+   - Implement timeouts
+
+3. Model Optimization:
+   - Use smaller models for simple tasks
+   - Implement model quantization
+   - Consider edge deployment
+
+4. Context Management:
+   - Minimize context size
+   - Use relevant context only
+   - Implement context window management
+"""
+```
+
+## Integration with ROS 2 Ecosystem
+
+### Complete Integration Example
+
+```python
+# Complete integration example combining all concepts
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from geometry_msgs.msg import Twist, PoseStamped
+from sensor_msgs.msg import LaserScan, Image
+from action_msgs.msg import GoalStatus
+from rclpy.action import ActionClient
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from threading import Lock
+import asyncio
+import json
+from typing import Dict, List, Any, Optional
+
+class CompleteCognitivePlanningNode(Node):
+    def __init__(self):
+        super().__init__('complete_cognitive_planning')
+
+        # Threading lock for safe access
+        self.lock = Lock()
+
+        # Initialize all required interfaces
+        self.initialize_subscriptions()
+        self.initialize_publishers()
+        self.initialize_action_clients()
+        self.initialize_state()
+
+        # Start async processing
+        self.processing_tasks = []
+
+    def initialize_subscriptions(self):
+        """Initialize all subscriptions"""
+        # Goal input
+        self.goal_subscription = self.create_subscription(
+            String,
+            'high_level_goal',
+            self.complete_goal_callback,
+            10
+        )
+
+        # Sensor inputs for context
+        self.laser_subscription = self.create_subscription(
+            LaserScan,
+            'scan',
+            self.laser_callback,
+            10
+        )
+
+        self.image_subscription = self.create_subscription(
+            Image,
+            'camera/image_raw',
+            self.image_callback,
+            10
+        )
+
+        self.pose_subscription = self.create_subscription(
+            PoseStamped,
+            'robot_pose',
+            self.pose_callback,
+            10
+        )
+
+    def initialize_publishers(self):
+        """Initialize all publishers"""
+        self.plan_publisher = self.create_publisher(String, 'action_plan', 10)
+        self.cmd_vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
+        self.status_publisher = self.create_publisher(String, 'planning_status', 10)
+
+    def initialize_action_clients(self):
+        """Initialize action clients"""
+        self.action_clients = {}
+
+    def initialize_state(self):
+        """Initialize robot state"""
+        self.world_state = {
+            'robot_pose': {'x': 0.0, 'y': 0.0, 'theta': 0.0},
+            'battery_level': 100.0,
+            'current_plan': None,
+            'plan_active': False
+        }
+
+    def complete_goal_callback(self, msg: String):
+        """Complete goal processing pipeline"""
+        goal = msg.data
+        self.get_logger().info(f'Received goal: {goal}')
+
+        # Process in async task to avoid blocking
+        task = asyncio.create_task(self.process_complete_goal(goal))
+        self.processing_tasks.append(task)
+
+    async def process_complete_goal(self, goal: str):
+        """Complete processing pipeline"""
+        with self.lock:
+            # Update status
+            self.publish_status(f'Processing goal: {goal}')
+
+            # Generate plan with context
+            plan = await self.generate_contextual_plan(goal)
+
+            if plan:
+                # Publish plan
+                self.publish_plan(plan)
+
+                # Execute plan
+                success = await self.execute_contextual_plan(plan)
+
+                if success:
+                    self.publish_status('Plan completed successfully')
+                else:
+                    self.publish_status('Plan execution failed')
+            else:
+                self.publish_status('Failed to generate plan')
+
+    async def generate_contextual_plan(self, goal: str) -> Optional[List[Dict[str, Any]]]:
+        """Generate plan with full context"""
+        # This would integrate all the concepts from above examples
+        # LLM call with context, multi-modal input, etc.
+        # For this example, return a mock plan
+        return [
+            {
+                "action_type": "navigation",
+                "action_name": "go_to",
+                "parameters": {"x": 1.0, "y": 1.0, "theta": 0.0},
+                "description": "Move to target location"
+            }
+        ]
+
+    async def execute_contextual_plan(self, plan: List[Dict[str, Any]]) -> bool:
+        """Execute plan with context awareness"""
+        self.world_state['plan_active'] = True
+        self.world_state['current_plan'] = plan
+
+        for action in plan:
+            if not self.world_state['plan_active']:
+                break
+
+            success = await self.execute_contextual_action(action)
+            if not success:
+                self.world_state['plan_active'] = False
+                return False
+
+        self.world_state['plan_active'] = False
+        self.world_state['current_plan'] = None
+        return True
+
+    async def execute_contextual_action(self, action: Dict[str, Any]) -> bool:
+        """Execute action with context"""
+        # This would handle each action type with context awareness
+        # For this example, return success
+        return True
+
+    def publish_plan(self, plan: List[Dict[str, Any]]):
+        """Publish generated plan"""
+        plan_msg = String()
+        plan_msg.data = json.dumps(plan, indent=2)
+        self.plan_publisher.publish(plan_msg)
+
+    def publish_status(self, status: str):
+        """Publish planning status"""
+        status_msg = String()
+        status_msg.data = status
+        self.status_publisher.publish(status_msg)
+
+    def laser_callback(self, msg: LaserScan):
+        """Update world state with laser data"""
+        with self.lock:
+            # Process laser data for context
+            pass
+
+    def image_callback(self, msg: Image):
+        """Update world state with image data"""
+        with self.lock:
+            # Process image data for context
+            pass
+
+    def pose_callback(self, msg: PoseStamped):
+        """Update robot pose"""
+        with self.lock:
+            self.world_state['robot_pose'] = {
+                'x': msg.pose.position.x,
+                'y': msg.pose.position.y,
+                'theta': self.quaternion_to_yaw(msg.pose.orientation)
+            }
+
+    def quaternion_to_yaw(self, orientation):
+        """Convert quaternion to yaw"""
+        import math
+        siny_cosp = 2 * (orientation.w * orientation.z + orientation.x * orientation.y)
+        cosy_cosp = 1 - 2 * (orientation.y * orientation.y + orientation.z * orientation.z)
+        return math.atan2(siny_cosp, cosy_cosp)
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    node = CompleteCognitivePlanningNode()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+## Troubleshooting Common Issues
+
+### Common LLM Integration Problems
+
+1. **API Rate Limits**: Implement request queuing and retry logic
+2. **Context Window Overflow**: Manage context size and relevance
+3. **Action Mapping Failures**: Implement fallback strategies
+4. **Timing Issues**: Use async processing for non-blocking operations
+5. **Error Propagation**: Implement proper error handling and recovery
+
+## RAG Summary
+
+LLM-based cognitive planning translates high-level goals into executable ROS 2 actions through a pipeline of semantic understanding, task decomposition, and action mapping. The system integrates context awareness, multi-modal inputs, and error recovery to create robust planning capabilities for humanoid robots. Proper optimization techniques ensure real-time performance while maintaining planning quality.
+
+## Knowledge Check
+
+1. What are the components of the cognitive planning pipeline?
+2. How do you maintain world state for context-aware planning?
+3. What is multi-modal integration and why is it important?
+4. How do you handle errors and recovery in LLM-based planning?
+5. What are the key optimization strategies for LLM integration?

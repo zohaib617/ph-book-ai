@@ -1,0 +1,967 @@
+---
+sidebar_label: 'Voice-to-Action (Whisper)'
+sidebar_position: 1
+---
+
+# Voice-to-Action (Whisper)
+
+## Introduction
+
+Voice-to-action systems enable humanoid robots to understand and respond to human speech commands. This chapter explores how OpenAI's Whisper speech recognition model can be integrated into robotics systems to create natural human-robot interaction. Whisper provides robust speech-to-text capabilities that can be used to interpret voice commands and convert them into actionable tasks for humanoid robots.
+
+## Whisper Architecture and Capabilities
+
+Whisper is a general-purpose speech recognition model that offers several key advantages for robotics applications:
+
+- **Multilingual Support**: Can recognize speech in multiple languages
+- **Robustness**: Works well in various acoustic environments
+- **Open Source**: Available under MIT license for research and commercial use
+- **Multiple Sizes**: From tiny models for edge devices to large models for high accuracy
+- **Speaker Identification**: Can identify different speakers in multi-person environments
+
+### Whisper Model Variants
+
+```python
+# Example of different Whisper model variants for robotics
+import whisper
+
+# Available models (sorted by size and capability)
+model_sizes = {
+    'tiny': {  # ~39M parameters, suitable for edge devices
+        'params': 39000000,
+        'relative_speed': 'fastest',
+        'accuracy': 'lowest',
+        'memory_usage': 'lowest',
+        'recommended_for': 'real-time applications, edge robotics'
+    },
+    'base': {  # ~74M parameters
+        'params': 74000000,
+        'relative_speed': 'fast',
+        'accuracy': 'low',
+        'memory_usage': 'low',
+        'recommended_for': 'mobile robots, general applications'
+    },
+    'small': {  # ~244M parameters
+        'params': 244000000,
+        'relative_speed': 'medium',
+        'accuracy': 'medium',
+        'memory_usage': 'medium',
+        'recommended_for': 'stationary robots, better accuracy needed'
+    },
+    'medium': {  # ~769M parameters
+        'params': 769000000,
+        'relative_speed': 'slow',
+        'accuracy': 'high',
+        'memory_usage': 'high',
+        'recommended_for': 'high-accuracy applications'
+    },
+    'large': {  # ~1550M parameters, best accuracy
+        'params': 1550000000,
+        'relative_speed': 'slowest',
+        'accuracy': 'highest',
+        'memory_usage': 'highest',
+        'recommended_for': 'research, high-precision tasks'
+    }
+}
+```
+
+## Whisper Integration with ROS 2
+
+### Basic Whisper Node Implementation
+
+```python
+# Example ROS 2 node for Whisper speech recognition
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from sensor_msgs.msg import AudioData
+from builtin_interfaces.msg import Time
+import whisper
+import numpy as np
+import io
+import wave
+from pydub import AudioSegment
+
+class WhisperNode(Node):
+    def __init__(self):
+        super().__init__('whisper_node')
+
+        # Initialize Whisper model
+        self.model = whisper.load_model("small")  # Choose appropriate size
+
+        # Subscriptions and publishers
+        self.audio_subscription = self.create_subscription(
+            AudioData,
+            'audio_input',
+            self.audio_callback,
+            10
+        )
+
+        self.text_publisher = self.create_publisher(
+            String,
+            'recognized_text',
+            10
+        )
+
+        self.command_publisher = self.create_publisher(
+            String,
+            'voice_command',
+            10
+        )
+
+        # Parameters
+        self.declare_parameter('model_size', 'small')
+        self.declare_parameter('language', 'en')
+        self.declare_parameter('energy_threshold', 1000)
+
+        self.model_size = self.get_parameter('model_size').value
+        self.language = self.get_parameter('language').value
+        self.energy_threshold = self.get_parameter('energy_threshold').value
+
+    def audio_callback(self, msg):
+        """Process incoming audio data"""
+        try:
+            # Convert audio data to appropriate format for Whisper
+            audio_np = np.frombuffer(msg.data, dtype=np.int16)
+
+            # Convert to float32 (Whisper expects float32)
+            audio_float = audio_np.astype(np.float32) / 32768.0
+
+            # Perform speech recognition
+            result = self.model.transcribe(audio_float, language=self.language)
+            recognized_text = result['text'].strip()
+
+            if recognized_text:  # Only publish if text was recognized
+                # Publish recognized text
+                text_msg = String()
+                text_msg.data = recognized_text
+                self.text_publisher.publish(text_msg)
+
+                # Process for command extraction
+                self.process_command(recognized_text)
+
+                self.get_logger().info(f'Recognized: {recognized_text}')
+
+        except Exception as e:
+            self.get_logger().error(f'Error in audio processing: {e}')
+
+    def process_command(self, text):
+        """Extract and publish commands from recognized text"""
+        # Simple command extraction (in real implementation, use NLP)
+        commands = self.extract_commands(text)
+
+        for command in commands:
+            cmd_msg = String()
+            cmd_msg.data = command
+            self.command_publisher.publish(cmd_msg)
+            self.get_logger().info(f'Command extracted: {command}')
+
+    def extract_commands(self, text):
+        """Extract actionable commands from text"""
+        # This is a simplified example
+        # In practice, use more sophisticated NLP techniques
+        text_lower = text.lower()
+
+        commands = []
+        if 'move' in text_lower or 'go' in text_lower or 'walk' in text_lower:
+            commands.append(f'move_command: {text}')
+        elif 'stop' in text_lower:
+            commands.append('stop_command')
+        elif 'turn' in text_lower or 'rotate' in text_lower:
+            commands.append(f'turn_command: {text}')
+        elif 'pick' in text_lower or 'grasp' in text_lower:
+            commands.append(f'grasp_command: {text}')
+        else:
+            commands.append(f'unknown_command: {text}')
+
+        return commands
+```
+
+## Real-time Audio Processing for Robotics
+
+### Audio Input Handling
+
+```python
+# Example of real-time audio processing for Whisper
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+import pyaudio
+import numpy as np
+import threading
+import queue
+import time
+
+class RealtimeAudioNode(Node):
+    def __init__(self):
+        super().__init__('realtime_audio_node')
+
+        # Audio parameters
+        self.rate = 16000  # Whisper works well at 16kHz
+        self.chunk = 1024
+        self.format = pyaudio.paInt16
+        self.channels = 1
+        self.record_seconds = 3  # Process 3-second chunks
+
+        # Initialize PyAudio
+        self.audio = pyaudio.PyAudio()
+
+        # Audio data queue for processing
+        self.audio_queue = queue.Queue()
+
+        # Publishers
+        self.text_publisher = self.create_publisher(String, 'recognized_text', 10)
+
+        # Initialize Whisper model
+        self.model = whisper.load_model("base")
+
+        # Start audio capture thread
+        self.capture_thread = threading.Thread(target=self.audio_capture_thread)
+        self.capture_thread.daemon = True
+        self.capture_thread.start()
+
+        # Start processing timer
+        self.process_timer = self.create_timer(3.0, self.process_audio_chunk)
+
+    def audio_capture_thread(self):
+        """Capture audio in a separate thread"""
+        stream = self.audio.open(
+            format=self.format,
+            channels=self.channels,
+            rate=self.rate,
+            input=True,
+            frames_per_buffer=self.chunk
+        )
+
+        frames = []
+        while rclpy.ok():
+            data = stream.read(self.chunk)
+            frames.append(data)
+
+            # Keep only the last record_seconds of audio
+            if len(frames) * self.chunk / self.rate > self.record_seconds:
+                frames.pop(0)
+
+        stream.stop_stream()
+        stream.close()
+
+    def process_audio_chunk(self):
+        """Process accumulated audio chunk"""
+        # Get recent audio data
+        stream = self.audio.open(
+            format=self.format,
+            channels=self.channels,
+            rate=self.rate,
+            input=True,
+            frames_per_buffer=self.chunk
+        )
+
+        frames = []
+        for _ in range(int(self.rate / self.chunk * self.record_seconds)):
+            data = stream.read(self.chunk)
+            frames.append(data)
+
+        stream.stop_stream()
+        stream.close()
+
+        # Convert to numpy array
+        audio_data = b''.join(frames)
+        audio_np = np.frombuffer(audio_data, dtype=np.int16)
+        audio_float = audio_np.astype(np.float32) / 32768.0
+
+        # Perform transcription
+        try:
+            result = self.model.transcribe(audio_float)
+            if result['text'].strip():
+                text_msg = String()
+                text_msg.data = result['text'].strip()
+                self.text_publisher.publish(text_msg)
+                self.get_logger().info(f'Heard: {result["text"]}')
+        except Exception as e:
+            self.get_logger().error(f'Transcription error: {e}')
+```
+
+## Voice Command Processing Pipeline
+
+### Natural Language Understanding for Robotics
+
+```python
+# Example of NLU pipeline for voice commands
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from geometry_msgs.msg import Twist
+from std_srvs.srv import Trigger
+import spacy
+import re
+
+class VoiceCommandProcessorNode(Node):
+    def __init__(self):
+        super().__init__('voice_command_processor')
+
+        # Load spaCy model for NLP
+        try:
+            self.nlp = spacy.load("en_core_web_sm")
+        except OSError:
+            self.get_logger().error("Please install en_core_web_sm: python -m spacy download en_core_web_sm")
+            self.nlp = None
+
+        # Subscriptions
+        self.text_subscription = self.create_subscription(
+            String,
+            'recognized_text',
+            self.text_callback,
+            10
+        )
+
+        # Publishers for different robot capabilities
+        self.cmd_vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
+        self.navigation_publisher = self.create_publisher(String, 'navigation_goal', 10)
+        self.arm_publisher = self.create_publisher(String, 'arm_command', 10)
+
+        # Service clients
+        self.speech_client = self.create_client(Trigger, 'speak_text')
+
+    def text_callback(self, msg):
+        """Process recognized text for commands"""
+        text = msg.data.lower().strip()
+
+        if not text:
+            return
+
+        self.get_logger().info(f'Processing command: {text}')
+
+        # Parse the command
+        parsed_command = self.parse_command(text)
+
+        if parsed_command:
+            self.execute_command(parsed_command)
+
+    def parse_command(self, text):
+        """Parse text command into structured command"""
+        if not self.nlp:
+            return self.simple_parse(text)
+
+        doc = self.nlp(text)
+
+        # Extract entities and dependencies
+        command_type = None
+        direction = None
+        distance = None
+        object_name = None
+
+        for token in doc:
+            if token.lemma_ in ['move', 'go', 'walk', 'navigate', 'drive']:
+                command_type = 'navigation'
+            elif token.lemma_ in ['turn', 'rotate', 'spin']:
+                command_type = 'rotation'
+            elif token.lemma_ in ['stop', 'halt', 'pause']:
+                command_type = 'stop'
+            elif token.lemma_ in ['pick', 'grasp', 'take', 'grab']:
+                command_type = 'manipulation'
+            elif token.lemma_ in ['speak', 'say', 'tell']:
+                command_type = 'speech'
+
+        # Extract direction
+        for token in doc:
+            if token.lemma_ in ['forward', 'ahead', 'front']:
+                direction = 'forward'
+            elif token.lemma_ in ['backward', 'back', 'reverse']:
+                direction = 'backward'
+            elif token.lemma_ in ['left', 'port']:
+                direction = 'left'
+            elif token.lemma_ in ['right', 'starboard']:
+                direction = 'right'
+
+        # Extract distance/duration
+        for ent in doc.ents:
+            if ent.label_ == "CARDINAL" or ent.label_ == "MONEY":
+                distance = ent.text
+
+        return {
+            'type': command_type,
+            'direction': direction,
+            'distance': distance,
+            'raw_text': text
+        }
+
+    def simple_parse(self, text):
+        """Simple command parsing without NLP"""
+        command = {'type': None, 'direction': None, 'distance': None, 'raw_text': text}
+
+        if any(word in text for word in ['move', 'go', 'walk']):
+            command['type'] = 'navigation'
+        elif any(word in text for word in ['turn', 'rotate']):
+            command['type'] = 'rotation'
+        elif any(word in text for word in ['stop', 'halt']):
+            command['type'] = 'stop'
+        elif any(word in text for word in ['pick', 'grasp', 'take']):
+            command['type'] = 'manipulation'
+
+        if 'forward' in text or 'ahead' in text:
+            command['direction'] = 'forward'
+        elif 'backward' in text or 'back' in text:
+            command['direction'] = 'backward'
+        elif 'left' in text:
+            command['direction'] = 'left'
+        elif 'right' in text:
+            command['direction'] = 'right'
+
+        # Extract numbers for distance/duration
+        numbers = re.findall(r'\d+', text)
+        if numbers:
+            command['distance'] = numbers[0]
+
+        return command
+
+    def execute_command(self, parsed_command):
+        """Execute the parsed command"""
+        cmd_type = parsed_command['type']
+
+        if cmd_type == 'navigation':
+            self.execute_navigation_command(parsed_command)
+        elif cmd_type == 'rotation':
+            self.execute_rotation_command(parsed_command)
+        elif cmd_type == 'stop':
+            self.execute_stop_command()
+        elif cmd_type == 'manipulation':
+            self.execute_manipulation_command(parsed_command)
+        elif cmd_type == 'speech':
+            self.execute_speech_command(parsed_command)
+
+    def execute_navigation_command(self, command):
+        """Execute navigation command"""
+        twist = Twist()
+
+        if command['direction'] == 'forward':
+            twist.linear.x = 0.5  # m/s
+        elif command['direction'] == 'backward':
+            twist.linear.x = -0.5
+        else:
+            twist.linear.x = 0.5  # default forward
+
+        # Set duration based on distance if specified
+        duration = float(command['distance']) if command['distance'] else 2.0
+
+        self.cmd_vel_publisher.publish(twist)
+        self.get_logger().info(f'Moving {command["direction"] or "forward"} for {duration}s')
+
+    def execute_rotation_command(self, command):
+        """Execute rotation command"""
+        twist = Twist()
+
+        if command['direction'] == 'left':
+            twist.angular.z = 0.5  # rad/s
+        elif command['direction'] == 'right':
+            twist.angular.z = -0.5
+        else:
+            twist.angular.z = 0.5  # default turn right
+
+        duration = float(command['distance']) if command['distance'] else 1.0
+
+        self.cmd_vel_publisher.publish(twist)
+        self.get_logger().info(f'Turning {command["direction"] or "right"} for {duration}s')
+
+    def execute_stop_command(self):
+        """Execute stop command"""
+        twist = Twist()  # Zero velocities
+        self.cmd_vel_publisher.publish(twist)
+        self.get_logger().info('Stopping robot')
+
+    def execute_manipulation_command(self, command):
+        """Execute manipulation command"""
+        arm_cmd = String()
+        arm_cmd.data = command['raw_text']
+        self.arm_publisher.publish(arm_cmd)
+        self.get_logger().info(f'Arm command: {command["raw_text"]}')
+
+    def execute_speech_command(self, command):
+        """Execute speech command"""
+        if self.speech_client.wait_for_service(timeout_sec=1.0):
+            # This would call a text-to-speech service
+            pass
+        else:
+            self.get_logger().warn('Speech service not available')
+```
+
+## Whisper Optimization for Robotics
+
+### Edge Deployment Considerations
+
+```python
+# Example of optimized Whisper for edge robotics
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+import torch
+import whisper
+import numpy as np
+from collections import deque
+import time
+
+class OptimizedWhisperNode(Node):
+    def __init__(self):
+        super().__init__('optimized_whisper_node')
+
+        # Check for GPU availability
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.get_logger().info(f'Using device: {self.device}')
+
+        # Initialize model with optimization
+        self.model = whisper.load_model("base").to(self.device)
+        self.model.eval()  # Set to evaluation mode
+
+        # Audio processing parameters
+        self.sample_rate = 16000  # Whisper standard
+        self.audio_buffer_size = 16000 * 3  # 3 seconds of audio
+        self.audio_buffer = deque(maxlen=self.audio_buffer_size)
+
+        # Subscriptions and publishers
+        self.audio_subscription = self.create_subscription(
+            String,  # In practice, this would be AudioData
+            'audio_buffer',
+            self.optimized_audio_callback,
+            10
+        )
+
+        self.text_publisher = self.create_publisher(String, 'recognized_text', 10)
+
+        # Performance monitoring
+        self.processing_times = deque(maxlen=10)
+
+        # Timer for periodic processing
+        self.process_timer = self.create_timer(2.0, self.process_audio_buffer)
+
+    def optimized_audio_callback(self, msg):
+        """Optimized audio buffer management"""
+        # Convert audio data to float32
+        audio_data = np.frombuffer(msg.data.encode('latin1'), dtype=np.int16)
+        audio_float = audio_data.astype(np.float32) / 32768.0
+
+        # Add to circular buffer
+        for sample in audio_float:
+            self.audio_buffer.append(sample)
+
+    def process_audio_buffer(self):
+        """Process audio buffer with Whisper"""
+        if len(self.audio_buffer) < self.audio_buffer_size // 2:
+            return  # Not enough audio data yet
+
+        # Convert buffer to numpy array
+        audio_array = np.array(list(self.audio_buffer))
+
+        # Measure processing time
+        start_time = time.time()
+
+        try:
+            # Process with Whisper
+            result = self.model.transcribe(audio_array, language='en')
+
+            processing_time = time.time() - start_time
+            self.processing_times.append(processing_time)
+
+            # Log performance
+            avg_time = sum(self.processing_times) / len(self.processing_times)
+            self.get_logger().info(f'Processing time: {processing_time:.2f}s (avg: {avg_time:.2f}s)')
+
+            if result['text'].strip():
+                text_msg = String()
+                text_msg.data = result['text'].strip()
+                self.text_publisher.publish(text_msg)
+
+        except Exception as e:
+            self.get_logger().error(f'Whisper processing error: {e}')
+```
+
+## Voice Activity Detection (VAD) Integration
+
+### Combining Whisper with VAD
+
+```python
+# Example of combining Whisper with Voice Activity Detection
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+import numpy as np
+from scipy import signal
+import threading
+
+class VADWhisperNode(Node):
+    def __init__(self):
+        super().__init__('vad_whisper_node')
+
+        # VAD parameters
+        self.energy_threshold = 1000
+        self.silence_duration = 0.5  # seconds
+        self.min_speech_duration = 0.5  # seconds
+
+        # Audio processing
+        self.audio_buffer = []
+        self.is_speaking = False
+        self.silence_start_time = None
+        self.speech_start_time = None
+
+        # Initialize Whisper
+        self.model = whisper.load_model("base")
+
+        # Publishers
+        self.text_publisher = self.create_publisher(String, 'recognized_text', 10)
+
+        # Timer for audio processing
+        self.process_timer = self.create_timer(0.1, self.process_audio)
+
+    def calculate_energy(self, audio_chunk):
+        """Calculate energy of audio chunk for VAD"""
+        return np.mean(np.square(audio_chunk))
+
+    def detect_voice_activity(self, audio_chunk):
+        """Detect voice activity in audio chunk"""
+        energy = self.calculate_energy(audio_chunk)
+        return energy > self.energy_threshold
+
+    def process_audio(self):
+        """Process incoming audio for VAD and Whisper"""
+        # In a real implementation, this would get audio from a source
+        # For this example, we'll simulate the process
+
+        # This is where you would get audio data
+        # audio_chunk = self.get_audio_chunk()
+
+        # For simulation, we'll create a mock audio chunk
+        audio_chunk = np.random.random(160) * 0.1  # 10ms at 16kHz
+
+        voice_active = self.detect_voice_activity(audio_chunk)
+
+        if voice_active and not self.is_speaking:
+            # Speech started
+            self.is_speaking = True
+            self.speech_start_time = time.time()
+            self.audio_buffer = []  # Start new buffer
+            self.get_logger().info('Speech detected, starting recording')
+
+        if self.is_speaking:
+            # Add to buffer
+            self.audio_buffer.extend(audio_chunk)
+
+            if not voice_active:
+                # Silence detected
+                if self.silence_start_time is None:
+                    self.silence_start_time = time.time()
+            else:
+                # Voice detected, reset silence timer
+                self.silence_start_time = None
+
+        # Check if we should process the audio
+        if (self.is_speaking and
+            self.silence_start_time and
+            time.time() - self.silence_start_time > self.silence_duration):
+
+            # Enough silence, process the speech
+            self.process_speech_segment()
+
+        # Check if buffer is getting too large
+        max_buffer_duration = 5.0  # Maximum 5 seconds
+        if (self.is_speaking and
+            len(self.audio_buffer) / 16000 > max_buffer_duration):
+            self.process_speech_segment()
+
+    def process_speech_segment(self):
+        """Process collected speech segment with Whisper"""
+        if len(self.audio_buffer) < 1600:  # At least 0.1 seconds
+            self.reset_speaking_state()
+            return
+
+        # Convert buffer to numpy array
+        audio_array = np.array(self.audio_buffer, dtype=np.float32)
+
+        try:
+            # Transcribe with Whisper
+            result = self.model.transcribe(audio_array)
+
+            if result['text'].strip():
+                text_msg = String()
+                text_msg.data = result['text'].strip()
+                self.text_publisher.publish(text_msg)
+                self.get_logger().info(f'Recognized: {result["text"]}')
+
+        except Exception as e:
+            self.get_logger().error(f'Whisper error: {e}')
+
+        self.reset_speaking_state()
+
+    def reset_speaking_state(self):
+        """Reset voice activity detection state"""
+        self.is_speaking = False
+        self.silence_start_time = None
+        self.speech_start_time = None
+        self.audio_buffer = []
+        self.get_logger().info('Reset speech detection state')
+```
+
+## Integration with Humanoid Robot Systems
+
+### Complete Voice Command Pipeline
+
+```python
+# Example of complete voice-to-action pipeline for humanoid robots
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from geometry_msgs.msg import Twist, Pose
+from sensor_msgs.msg import JointState
+from builtin_interfaces.msg import Duration
+from action_msgs.msg import GoalStatus
+from rclpy.action import ActionClient
+from control_msgs.action import FollowJointTrajectory
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+
+class HumanoidVoiceControllerNode(Node):
+    def __init__(self):
+        super().__init__('humanoid_voice_controller')
+
+        # Initialize Whisper model
+        self.whisper_model = whisper.load_model("small")
+
+        # Command mapping
+        self.command_mapping = {
+            'walk forward': self.walk_forward,
+            'walk backward': self.walk_backward,
+            'turn left': self.turn_left,
+            'turn right': self.turn_right,
+            'raise arms': self.raise_arms,
+            'lower arms': self.lower_arms,
+            'wave': self.wave,
+            'dance': self.dance,
+            'stop': self.stop_robot
+        }
+
+        # Publishers for different robot systems
+        self.cmd_vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
+        self.joint_trajectory_client = ActionClient(
+            self,
+            FollowJointTrajectory,
+            'joint_trajectory_controller/follow_joint_trajectory'
+        )
+
+        # Voice command subscription
+        self.voice_subscription = self.create_subscription(
+            String,
+            'voice_command',
+            self.voice_command_callback,
+            10
+        )
+
+        self.get_logger().info('Humanoid Voice Controller initialized')
+
+    def voice_command_callback(self, msg):
+        """Process voice command"""
+        command_text = msg.data.lower()
+        self.get_logger().info(f'Received voice command: {command_text}')
+
+        # Find best matching command
+        best_match = self.find_best_command_match(command_text)
+
+        if best_match:
+            self.get_logger().info(f'Executing command: {best_match}')
+            self.command_mapping[best_match]()
+        else:
+            self.get_logger().warn(f'Unknown command: {command_text}')
+            self.execute_fallback_behavior(command_text)
+
+    def find_best_command_match(self, text):
+        """Find best matching command for the text"""
+        # Simple keyword matching (in practice, use more sophisticated NLP)
+        for command in self.command_mapping.keys():
+            if all(word in text for word in command.split()):
+                return command
+
+        # Partial matching
+        for command in self.command_mapping.keys():
+            if any(word in text for word in command.split()):
+                return command
+
+        return None
+
+    def walk_forward(self):
+        """Make humanoid walk forward"""
+        # This would involve complex bipedal locomotion
+        # For this example, we'll send a simple velocity command
+        twist = Twist()
+        twist.linear.x = 0.3  # Forward velocity
+        self.cmd_vel_publisher.publish(twist)
+
+    def walk_backward(self):
+        """Make humanoid walk backward"""
+        twist = Twist()
+        twist.linear.x = -0.3  # Backward velocity
+        self.cmd_vel_publisher.publish(twist)
+
+    def turn_left(self):
+        """Make humanoid turn left"""
+        twist = Twist()
+        twist.angular.z = 0.5  # Left turn
+        self.cmd_vel_publisher.publish(twist)
+
+    def turn_right(self):
+        """Make humanoid turn right"""
+        twist = Twist()
+        twist.angular.z = -0.5  # Right turn
+        self.cmd_vel_publisher.publish(twist)
+
+    def raise_arms(self):
+        """Raise humanoid arms"""
+        # Create joint trajectory for raising arms
+        trajectory = JointTrajectory()
+        trajectory.joint_names = ['left_shoulder_joint', 'right_shoulder_joint']
+
+        point = JointTrajectoryPoint()
+        point.positions = [1.57, 1.57]  # Raise both arms
+        point.time_from_start = Duration(sec=2)  # 2 seconds to complete
+
+        trajectory.points = [point]
+
+        self.send_joint_trajectory(trajectory)
+
+    def lower_arms(self):
+        """Lower humanoid arms"""
+        trajectory = JointTrajectory()
+        trajectory.joint_names = ['left_shoulder_joint', 'right_shoulder_joint']
+
+        point = JointTrajectoryPoint()
+        point.positions = [0.0, 0.0]  # Lower both arms
+        point.time_from_start = Duration(sec=2)
+
+        trajectory.points = [point]
+
+        self.send_joint_trajectory(trajectory)
+
+    def wave(self):
+        """Make humanoid wave"""
+        trajectory = JointTrajectory()
+        trajectory.joint_names = ['right_shoulder_joint', 'right_elbow_joint']
+
+        # Wave motion: raise and rotate
+        point1 = JointTrajectoryPoint()
+        point1.positions = [1.57, 0.0]
+        point1.time_from_start = Duration(sec=1)
+
+        point2 = JointTrajectoryPoint()
+        point2.positions = [1.57, 1.57]
+        point2.time_from_start = Duration(sec=2)
+
+        point3 = JointTrajectoryPoint()
+        point3.positions = [1.57, 0.0]
+        point3.time_from_start = Duration(sec=3)
+
+        trajectory.points = [point1, point2, point3]
+
+        self.send_joint_trajectory(trajectory)
+
+    def dance(self):
+        """Make humanoid dance"""
+        # This would involve a complex sequence of movements
+        # For this example, we'll do a simple dance sequence
+        self.wave()
+        self.get_logger().info('Dancing! (simplified version)')
+
+    def stop_robot(self):
+        """Stop all robot movement"""
+        twist = Twist()  # Zero velocities
+        self.cmd_vel_publisher.publish(twist)
+
+    def send_joint_trajectory(self, trajectory):
+        """Send joint trajectory to robot"""
+        if self.joint_trajectory_client.wait_for_server(timeout_sec=1.0):
+            goal_msg = FollowJointTrajectory.Goal()
+            goal_msg.trajectory = trajectory
+
+            self.joint_trajectory_client.send_goal_async(goal_msg)
+        else:
+            self.get_logger().error('Joint trajectory server not available')
+
+    def execute_fallback_behavior(self, command_text):
+        """Execute fallback behavior for unknown commands"""
+        # In a real system, you might query an LLM for interpretation
+        self.get_logger().info(f'Trying to interpret: {command_text}')
+
+        # For now, just stop
+        self.stop_robot()
+```
+
+## Performance Optimization and Best Practices
+
+### Optimizing Whisper for Robotics Applications
+
+```python
+# Example of performance optimization techniques
+class WhisperOptimizer:
+    @staticmethod
+    def optimize_for_latency(model_size="base"):
+        """Optimize Whisper for low latency"""
+        # Use smaller model for faster processing
+        # Implement streaming for real-time processing
+        # Use quantization for faster inference
+        return whisper.load_model(model_size)
+
+    @staticmethod
+    def optimize_for_accuracy(model_size="large"):
+        """Optimize Whisper for high accuracy"""
+        # Use larger model for better accuracy
+        # Use beam search for better results
+        # Apply language-specific fine-tuning
+        return whisper.load_model(model_size)
+
+    @staticmethod
+    def streaming_transcription(audio_stream, model, chunk_size=16000):
+        """Perform streaming transcription"""
+        # This would implement real streaming
+        # For now, return a placeholder
+        pass
+
+# Best practices summary
+"""
+Whisper Best Practices for Robotics:
+
+1. Model Selection:
+   - Use 'base' or 'small' for real-time applications
+   - Use 'large' for high-accuracy scenarios
+   - Consider hardware constraints
+
+2. Audio Preprocessing:
+   - Ensure 16kHz sample rate
+   - Apply noise reduction
+   - Use proper microphone placement
+
+3. Performance Optimization:
+   - Use GPU acceleration when available
+   - Implement audio buffering
+   - Consider quantized models
+
+4. Robustness:
+   - Handle different accents and languages
+   - Implement voice activity detection
+   - Add confidence scoring
+"""
+```
+
+## Troubleshooting Common Issues
+
+### Common Whisper Integration Problems
+
+1. **Audio Format Issues**: Ensure audio is properly formatted for Whisper (16kHz, float32)
+2. **Performance Problems**: Use appropriate model size for hardware constraints
+3. **Accuracy Issues**: Consider fine-tuning for domain-specific vocabulary
+4. **Latency Problems**: Implement streaming or buffering strategies
+5. **Environmental Noise**: Use noise reduction and VAD techniques
+
+## RAG Summary
+
+Whisper provides robust speech recognition capabilities for humanoid robotics applications. The integration involves real-time audio processing, voice activity detection, and natural language understanding to convert voice commands into actionable robot behaviors. Proper optimization and model selection are crucial for real-time performance on robotic platforms.
+
+## Knowledge Check
+
+1. What are the different Whisper model variants and their trade-offs?
+2. How do you integrate Whisper with ROS 2 for real-time processing?
+3. What is the role of Voice Activity Detection in robotics applications?
+4. How do you map voice commands to robot actions?
+5. What are the key optimization strategies for Whisper in robotics?

@@ -1,0 +1,28 @@
+{
+  "id": "modules/module-4-vla/llm-cognitive-planning",
+  "title": "Cognitive Planning (LLMs → ROS 2 actions)",
+  "description": "Introduction",
+  "source": "@site/docs/modules/module-4-vla/02-llm-cognitive-planning.mdx",
+  "sourceDirName": "modules/module-4-vla",
+  "slug": "/modules/module-4-vla/llm-cognitive-planning",
+  "permalink": "/docs/modules/module-4-vla/llm-cognitive-planning",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/docs/modules/module-4-vla/02-llm-cognitive-planning.mdx",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_label": "Cognitive Planning (LLMs → ROS 2 actions)",
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Voice-to-Action (Whisper)",
+    "permalink": "/docs/modules/module-4-vla/whisper-voice-action"
+  },
+  "next": {
+    "title": "Capstone: Autonomous Humanoid Pipeline",
+    "permalink": "/docs/modules/module-4-vla/autonomous-humanoid"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -f src/pages/login.js docs/src/pages/login.js docs/src/pages/signup.js src/components/auth/SigninForm.jsx src/components/auth/SignupForm.jsx)",
+      "Bash(git checkout HEAD -- D:my-working-filesph_bookai-booksrccomponentsUrduToggle.jsx)",
+      "Bash(del \"D:\\my-working-files\\ph_book\\ai-book\\src\\contexts\\LanguageContext.js\")",
+      "Bash(powershell Remove-Item \"D:\\my-working-files\\ph_book\\ai-book\\src\\contexts\\LanguageContext.js\" -Force)",
+      "Bash(powershell Remove-Item \"D:\\my-working-files\\ph_book\\ai-book\\src\\theme\\Root.js\" -Force)"
+    ]
+  }
+}

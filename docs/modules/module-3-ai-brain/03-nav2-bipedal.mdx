@@ -1,0 +1,745 @@
+---
+sidebar_label: 'Nav2 for Bipedal Humanoid Movement'
+sidebar_position: 3
+---
+
+# Nav2 for Bipedal Humanoid Movement
+
+## Introduction
+
+Navigation2 (Nav2) is ROS 2's state-of-the-art navigation framework, designed for autonomous navigation of mobile robots. This chapter focuses on adapting Nav2 for bipedal humanoid robots, addressing the unique challenges of legged locomotion compared to wheeled robots. We'll explore how to configure and customize Nav2 for stable and efficient bipedal navigation.
+
+## Nav2 Architecture Overview
+
+Nav2 follows a behavior tree architecture with several key components:
+
+- **Navigation Server**: Central coordinator for navigation tasks
+- **Planners**: Global and local path planning algorithms
+- **Controllers**: Trajectory generation and execution
+- **Recovery Behaviors**: Actions for handling navigation failures
+- **Sensors Interface**: Integration with perception systems
+
+### Nav2 Core Components
+
+```yaml
+# Example Nav2 configuration for humanoid robot
+amcl:
+  ros__parameters:
+    use_sim_time: True
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    alpha5: 0.2
+    base_frame_id: "base_link"
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+    do_beamskip: false
+    global_frame_id: "map"
+    lambda_short: 0.1
+    laser_likelihood_max_dist: 2.0
+    laser_max_range: 100.0
+    laser_min_range: -1.0
+    laser_model_type: "likelihood_field"
+    max_beams: 60
+    max_particles: 2000
+    min_particles: 500
+    odom_frame_id: "odom"
+    pf_err: 0.05
+    pf_z: 0.99
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    resample_interval: 1
+    robot_model_type: "omnidirectional"  # Important for humanoid
+    save_pose_rate: 0.5
+    sigma_hit: 0.2
+    tf_broadcast: true
+    transform_tolerance: 1.0
+    update_min_a: 0.2
+    update_min_d: 0.25
+    z_hit: 0.5
+    z_max: 0.05
+    z_rand: 0.05
+    z_short: 0.05
+```
+
+## Bipedal Navigation Challenges
+
+### Balance and Stability
+
+Bipedal robots face unique challenges compared to wheeled robots:
+
+1. **Dynamic Balance**: Maintaining balance during movement
+2. **Foot Placement**: Precise footstep planning
+3. **Center of Mass**: Managing CoM during navigation
+4. **Ground Contact**: Ensuring stable foot-ground contact
+
+### Motion Constraints
+
+```python
+# Example of bipedal motion constraints in Nav2
+class BipedalMotionConstraints:
+    def __init__(self):
+        self.max_step_length = 0.3  # meters
+        self.max_step_width = 0.2  # meters
+        self.max_step_height = 0.1  # meters (for step climbing)
+        self.min_turn_radius = 0.5  # meters (turning constraints)
+        self.max_linear_velocity = 0.5  # m/s
+        self.max_angular_velocity = 0.3  # rad/s
+        self.step_duration = 1.0  # seconds per step
+        self.zmp_margin = 0.05  # Zero Moment Point safety margin
+
+    def is_trajectory_valid(self, trajectory):
+        """Check if a trajectory is valid for bipedal locomotion"""
+        for point in trajectory:
+            # Check step length constraints
+            if point.step_length > self.max_step_length:
+                return False
+
+            # Check velocity constraints
+            if point.linear_velocity > self.max_linear_velocity:
+                return False
+
+            if point.angular_velocity > self.max_angular_velocity:
+                return False
+
+        return True
+```
+
+## Nav2 Configuration for Humanoid Robots
+
+### Costmap Configuration
+
+```yaml
+# Costmap configuration for bipedal navigation
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: map
+      robot_base_frame: base_link
+      use_dijkstra: true
+      use_grid_path: false
+      allow_unknown: true
+      track_unknown_space: true
+      footprint: [[-0.3, -0.2], [-0.3, 0.2], [0.3, 0.2], [0.3, -0.2]]
+      footprint_padding: 0.05
+      resolution: 0.05  # Higher resolution for precise foot placement
+      robot_radius: 0.3
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      obstacle_layer:
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: LaserScan
+      static_layer:
+        map_topic: map
+        enabled: true
+        subscribe_to_updates: true
+      inflation_layer:
+        enabled: true
+        cost_scaling_factor: 3.0  # Higher for humanoid safety
+        inflation_radius: 0.55    # Larger for bipedal stability
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 10.0
+      publish_frequency: 5.0
+      global_frame: odom
+      robot_base_frame: base_link
+      rolling_window: true
+      width: 5  # Smaller for humanoid agility
+      height: 5
+      resolution: 0.05
+      robot_radius: 0.3
+      plugins: ["obstacle_layer", "voxel_layer", "inflation_layer"]
+      obstacle_layer:
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: LaserScan
+      voxel_layer:
+        enabled: True
+        publish_voxel_map: True
+        origin_z: 0.0
+        z_resolution: 0.2
+        z_voxels: 10
+        max_obstacle_height: 2.0
+        mark_threshold: 0
+        observation_sources: scan
+      inflation_layer:
+        enabled: true
+        cost_scaling_factor: 5.0  # Higher for local safety
+        inflation_radius: 0.6
+```
+
+### Global Planner Configuration
+
+```yaml
+# Global planner for humanoid navigation
+bt_navigator:
+  ros__parameters:
+    use_sim_time: True
+    global_frame: map
+    robot_base_frame: base_link
+    odom_topic: /odom
+    default_bt_xml_filename: "navigate_w_replanning_and_recovery.xml"
+    plugin_lib_names:
+    - nav2_compute_path_to_pose_action_bt_node
+    - nav2_follow_path_action_bt_node
+    - nav2_back_up_action_bt_node
+    - nav2_spin_action_bt_node
+    - nav2_wait_action_bt_node
+    - nav2_clear_costmap_service_bt_node
+    - nav2_is_stuck_condition_bt_node
+    - nav2_goal_reached_condition_bt_node
+    - nav2_goal_updated_condition_bt_node
+    - nav2_initial_pose_received_condition_bt_node
+    - nav2_reinitialize_global_localization_service_bt_node
+    - nav2_rate_controller_bt_node
+    - nav2_distance_controller_bt_node
+    - nav2_speed_controller_bt_node
+    - nav2_truncate_path_action_bt_node
+    - nav2_goal_updater_node_bt_node
+    - nav2_recovery_node_bt_node
+    - nav2_pipeline_sequence_bt_node
+    - nav2_round_robin_node_bt_node
+    - nav2_transform_available_condition_bt_node
+    - nav2_time_expired_condition_bt_node
+    - nav2_path_expiring_timer_condition
+    - nav2_distance_traveled_condition_bt_node
+    - nav2_single_trigger_bt_node
+    - nav2_is_path_valid_condition_bt_node
+    - nav2_compute_path_through_poses_action_bt_node
+    - nav2_compute_path_to_pose_action_bt_node
+    - nav2_smooth_path_action_bt_node
+```
+
+## Footstep Planning for Bipedal Navigation
+
+### Footstep Planner Integration
+
+```python
+# Example footstep planner for humanoid navigation
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import PoseStamped, Point
+from nav_msgs.msg import Path
+from visualization_msgs.msg import Marker
+import numpy as np
+
+class FootstepPlannerNode(Node):
+    def __init__(self):
+        super().__init__('footstep_planner')
+
+        self.path_subscription = self.create_subscription(
+            Path,
+            'global_plan',
+            self.path_callback,
+            10
+        )
+
+        self.footstep_publisher = self.create_publisher(
+            Path,
+            'footstep_plan',
+            10
+        )
+
+        self.visualization_publisher = self.create_publisher(
+            Marker,
+            'footstep_visualization',
+            10
+        )
+
+    def path_callback(self, path_msg):
+        """Convert global path to footstep plan"""
+        footstep_plan = self.generate_footsteps(path_msg)
+        self.footstep_publisher.publish(footstep_plan)
+        self.visualize_footsteps(footstep_plan)
+
+    def generate_footsteps(self, path_msg):
+        """Generate footstep plan from global path"""
+        footsteps = Path()
+        footsteps.header = path_msg.header
+
+        # Generate footsteps along the path
+        step_size = 0.3  # meters between footsteps
+        current_pos = np.array([0.0, 0.0])
+        step_offset = 0.0  # Alternate left/right foot
+
+        for i in range(1, len(path_msg.poses)):
+            start = np.array([path_msg.poses[i-1].pose.position.x,
+                             path_msg.poses[i-1].pose.position.y])
+            end = np.array([path_msg.poses[i].pose.position.x,
+                           path_msg.poses[i].pose.position.y])
+
+            segment_length = np.linalg.norm(end - start)
+            direction = (end - start) / segment_length if segment_length > 0 else np.array([1, 0])
+
+            # Generate footsteps along this segment
+            distance = 0
+            while distance < segment_length:
+                step_pos = start + distance * direction
+                pose = PoseStamped()
+                pose.header = path_msg.header
+                pose.pose.position.x = float(step_pos[0])
+                pose.pose.position.y = float(step_pos[1])
+                pose.pose.position.z = 0.0  # Ground level
+
+                # Alternate feet
+                if step_offset == 0:
+                    pose.pose.position.y += 0.1  # Right foot
+                    step_offset = 0.1
+                else:
+                    pose.pose.position.y -= 0.2  # Left foot
+                    step_offset = 0.0
+
+                # Set orientation to match path direction
+                pose.pose.orientation.z = float(direction[1])
+                pose.pose.orientation.w = float(direction[0])
+
+                footsteps.poses.append(pose)
+                distance += step_size
+
+        return footsteps
+
+    def visualize_footsteps(self, footsteps):
+        """Visualize footsteps in RViz"""
+        marker = Marker()
+        marker.header = footsteps.header
+        marker.ns = "footsteps"
+        marker.id = 0
+        marker.type = Marker.SPHERE_LIST
+        marker.action = Marker.ADD
+        marker.scale.x = 0.05
+        marker.scale.y = 0.05
+        marker.scale.z = 0.01
+        marker.color.r = 1.0
+        marker.color.g = 0.0
+        marker.color.b = 0.0
+        marker.color.a = 1.0
+
+        for pose in footsteps.poses:
+            point = Point()
+            point.x = pose.pose.position.x
+            point.y = pose.pose.position.y
+            point.z = pose.pose.position.z
+            marker.points.append(point)
+
+        self.visualization_publisher.publish(marker)
+```
+
+## Balance Control Integration
+
+### Center of Mass Management
+
+```python
+# Example balance control for humanoid navigation
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import Twist, PointStamped
+from sensor_msgs.msg import Imu
+from tf2_ros import TransformListener, Buffer
+import numpy as np
+
+class BalanceControllerNode(Node):
+    def __init__(self):
+        super().__init__('balance_controller')
+
+        self.cmd_vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
+        self.imu_subscription = self.create_subscription(
+            Imu,
+            'imu/data',
+            self.imu_callback,
+            10
+        )
+
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
+        # Balance control parameters
+        self.balance_threshold = 0.1  # meters
+        self.max_correction_velocity = 0.2  # m/s
+        self.balance_gains = {'p': 2.0, 'i': 0.1, 'd': 0.05}
+
+        self.imu_orientation = None
+        self.error_integral = 0.0
+        self.previous_error = 0.0
+
+        self.timer = self.create_timer(0.05, self.balance_control_loop)  # 20Hz
+
+    def imu_callback(self, msg):
+        """Process IMU data for balance estimation"""
+        self.imu_orientation = msg.orientation
+
+    def balance_control_loop(self):
+        """Main balance control loop"""
+        if self.imu_orientation is None:
+            return
+
+        # Calculate balance error (simplified)
+        # In reality, you'd use more sophisticated CoM estimation
+        roll, pitch, yaw = self.quaternion_to_euler(
+            self.imu_orientation.x,
+            self.imu_orientation.y,
+            self.imu_orientation.z,
+            self.imu_orientation.w
+        )
+
+        # Balance error based on pitch (forward/backward lean)
+        error = pitch
+
+        # PID control for balance correction
+        self.error_integral += error * 0.05  # dt = 0.05s
+        derivative = (error - self.previous_error) / 0.05
+
+        correction = (
+            self.balance_gains['p'] * error +
+            self.balance_gains['i'] * self.error_integral +
+            self.balance_gains['d'] * derivative
+        )
+
+        # Limit correction
+        correction = max(min(correction, self.max_correction_velocity),
+                        -self.max_correction_velocity)
+
+        # Publish velocity command to maintain balance
+        cmd_vel = Twist()
+        cmd_vel.linear.x = min(max(-correction, -0.1), 0.1)  # Forward/backward adjustment
+        cmd_vel.angular.z = 0.0  # No turning in balance mode
+
+        self.cmd_vel_publisher.publish(cmd_vel)
+        self.previous_error = error
+
+    def quaternion_to_euler(self, x, y, z, w):
+        """Convert quaternion to Euler angles"""
+        # Roll (x-axis rotation)
+        sinr_cosp = 2 * (w * x + y * z)
+        cosr_cosp = 1 - 2 * (x * x + y * y)
+        roll = np.arctan2(sinr_cosp, cosr_cosp)
+
+        # Pitch (y-axis rotation)
+        sinp = 2 * (w * y - z * x)
+        if np.abs(sinp) >= 1:
+            pitch = np.copysign(np.pi / 2, sinp)
+        else:
+            pitch = np.arcsin(sinp)
+
+        # Yaw (z-axis rotation)
+        siny_cosp = 2 * (w * z + x * y)
+        cosy_cosp = 1 - 2 * (y * y + z * z)
+        yaw = np.arctan2(siny_cosp, cosy_cosp)
+
+        return roll, pitch, yaw
+```
+
+## Navigation Recovery Behaviors for Humanoids
+
+### Specialized Recovery Behaviors
+
+```python
+# Example of humanoid-specific recovery behaviors
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from geometry_msgs.msg import Twist
+from builtin_interfaces.msg import Duration
+
+class HumanoidRecoveryNode(Node):
+    def __init__(self):
+        super().__init__('humanoid_recovery')
+
+        self.recovery_trigger_subscription = self.create_subscription(
+            String,
+            'recovery_trigger',
+            self.recovery_callback,
+            10
+        )
+
+        self.cmd_vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
+
+        self.recovery_behaviors = {
+            'back_up': self.back_up_recovery,
+            'spin_in_place': self.spin_recovery,
+            'wait': self.wait_recovery,
+            'step_back': self.step_back_recovery  # Humanoid-specific
+        }
+
+    def recovery_callback(self, msg):
+        """Handle recovery behavior requests"""
+        behavior = msg.data
+        if behavior in self.recovery_behaviors:
+            self.get_logger().info(f'Executing recovery behavior: {behavior}')
+            self.recovery_behaviors[behavior]()
+        else:
+            self.get_logger().warn(f'Unknown recovery behavior: {behavior}')
+
+    def step_back_recovery(self):
+        """Humanoid-specific recovery: step back carefully"""
+        self.get_logger().info('Executing step-back recovery')
+
+        # Publish command to take a careful step back
+        cmd_vel = Twist()
+        cmd_vel.linear.x = -0.1  # Slow backward movement
+        cmd_vel.angular.z = 0.0
+
+        # Execute for a short duration
+        self.execute_command_for_duration(cmd_vel, 2.0)
+
+    def back_up_recovery(self):
+        """Standard backup recovery"""
+        cmd_vel = Twist()
+        cmd_vel.linear.x = -0.2
+        cmd_vel.angular.z = 0.0
+
+        self.execute_command_for_duration(cmd_vel, 1.0)
+
+    def spin_recovery(self):
+        """Spin in place recovery"""
+        cmd_vel = Twist()
+        cmd_vel.linear.x = 0.0
+        cmd_vel.angular.z = 0.5  # 0.5 rad/s rotation
+
+        self.execute_command_for_duration(cmd_vel, 3.0)
+
+    def wait_recovery(self):
+        """Wait recovery"""
+        cmd_vel = Twist()
+        cmd_vel.linear.x = 0.0
+        cmd_vel.angular.z = 0.0
+
+        self.execute_command_for_duration(cmd_vel, 5.0)
+
+    def execute_command_for_duration(self, cmd_vel, duration):
+        """Execute a command for a specific duration"""
+        start_time = self.get_clock().now()
+
+        while (self.get_clock().now() - start_time).nanoseconds < duration * 1e9:
+            self.cmd_vel_publisher.publish(cmd_vel)
+            rclpy.spin_once(self, timeout_sec=0.1)
+
+        # Stop the robot
+        stop_cmd = Twist()
+        self.cmd_vel_publisher.publish(stop_cmd)
+```
+
+## Simulation and Testing
+
+### Gazebo Integration for Humanoid Nav2
+
+```xml
+<!-- Example Gazebo plugin for humanoid navigation simulation -->
+<gazebo>
+  <plugin name="nav2_simulation_plugin" filename="libnav2_robot_plugin.so">
+    <ros>
+      <namespace>/humanoid_robot</namespace>
+      <remappings>
+        <remap from="cmd_vel" to="cmd_vel_nav"/>
+        <remap from="odom" to="odom"/>
+        <remap from="scan" to="laser_scan"/>
+        <remap from="imu" to="imu/data"/>
+      </remappings>
+    </ros>
+    <odom_frame>odom</odom_frame>
+    <base_frame>base_link</base_frame>
+    <odom_publish_frequency>20.0</odom_publish_frequency>
+    <broadcast_tf>true</broadcast_tf>
+    <!-- Humanoid-specific parameters -->
+    <foot_separation>0.2</foot_separation>
+    <step_height>0.05</step_height>
+    <balance_margin>0.05</balance_margin>
+  </plugin>
+</gazebo>
+```
+
+### Testing Navigation Scenarios
+
+```python
+# Example navigation testing script
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import PoseStamped
+from action_msgs.msg import GoalStatus
+from nav2_msgs.action import NavigateToPose
+from rclpy.action import ActionClient
+
+class NavigationTestNode(Node):
+    def __init__(self):
+        super().__init__('navigation_test')
+        self.navigation_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+
+        # Test scenarios for humanoid navigation
+        self.test_scenarios = [
+            {'name': 'Straight line', 'goal': (2.0, 0.0, 0.0)},
+            {'name': '90 degree turn', 'goal': (2.0, 2.0, 1.57)},
+            {'name': 'Narrow passage', 'goal': (5.0, 0.0, 0.0)},
+            {'name': 'Obstacle avoidance', 'goal': (3.0, 3.0, 0.0)}
+        ]
+
+        self.test_index = 0
+        self.timer = self.create_timer(5.0, self.run_next_test)
+
+    def run_next_test(self):
+        """Run the next navigation test"""
+        if self.test_index >= len(self.test_scenarios):
+            self.get_logger().info('All tests completed')
+            return
+
+        scenario = self.test_scenarios[self.test_index]
+        self.get_logger().info(f'Running test: {scenario["name"]}')
+
+        goal_msg = NavigateToPose.Goal()
+        goal_msg.pose.header.frame_id = 'map'
+        goal_msg.pose.pose.position.x = float(scenario['goal'][0])
+        goal_msg.pose.pose.position.y = float(scenario['goal'][1])
+        goal_msg.pose.pose.orientation.z = float(scenario['goal'][2])
+        goal_msg.pose.pose.orientation.w = 1.0
+
+        self.send_goal_async(goal_msg)
+        self.test_index += 1
+
+    def send_goal_async(self, goal_msg):
+        """Send navigation goal"""
+        self.navigation_client.wait_for_server()
+        future = self.navigation_client.send_goal_async(
+            goal_msg,
+            feedback_callback=self.feedback_callback
+        )
+        future.add_done_callback(self.goal_response_callback)
+
+    def goal_response_callback(self, future):
+        """Handle goal response"""
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().info('Goal rejected')
+            return
+
+        self.get_logger().info('Goal accepted')
+        get_result_future = goal_handle.get_result_async()
+        get_result_future.add_done_callback(self.get_result_callback)
+
+    def get_result_callback(self, future):
+        """Handle navigation result"""
+        status = future.result().status
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().info('Navigation succeeded')
+        else:
+            self.get_logger().info(f'Navigation failed with status: {status}')
+
+    def feedback_callback(self, feedback_msg):
+        """Handle navigation feedback"""
+        feedback = feedback_msg.feedback
+        self.get_logger().info(f'Current pose: ({feedback.current_pose.pose.position.x:.2f}, {feedback.current_pose.pose.position.y:.2f})')
+```
+
+## Performance Optimization
+
+### Computational Efficiency for Humanoid Navigation
+
+```python
+# Example optimization techniques for humanoid navigation
+class OptimizedHumanoidNav:
+    def __init__(self):
+        # Pre-allocated arrays for performance
+        self.foot_positions = np.zeros((100, 2))  # Pre-allocate for 100 footsteps
+        self.trajectory_buffer = np.zeros((50, 3))  # Pre-allocate trajectory points
+        self.costmap_buffer = None
+
+        # Optimized data structures
+        self.footstep_queue = collections.deque(maxlen=50)
+        self.balance_history = collections.deque(maxlen=20)
+
+    def optimized_footstep_generation(self, path, resolution=0.1):
+        """Optimized footstep generation with pre-allocation"""
+        num_steps = int(len(path) / resolution)
+
+        # Use pre-allocated array
+        self.foot_positions.fill(0)
+
+        for i in range(min(num_steps, len(self.foot_positions))):
+            # Calculate footstep position
+            idx = int(i * resolution)
+            if idx < len(path):
+                self.foot_positions[i, 0] = path[idx].position.x
+                self.foot_positions[i, 1] = path[idx].position.y
+
+        return self.foot_positions[:num_steps]
+
+    def efficient_balance_control(self, sensor_data):
+        """Efficient balance control with deque"""
+        # Add current measurement to history
+        self.balance_history.append(sensor_data.balance_state)
+
+        # Calculate moving average efficiently
+        avg_balance = sum(self.balance_history) / len(self.balance_history)
+
+        # Simple balance correction
+        correction = self.calculate_balance_correction(avg_balance)
+        return correction
+```
+
+## Best Practices for Humanoid Navigation
+
+### Safety Considerations
+
+1. **Stability Margins**: Always maintain safety margins for balance
+2. **Step Verification**: Verify each step before execution
+3. **Fall Detection**: Implement robust fall detection and recovery
+4. **Emergency Stop**: Quick stop capabilities for safety
+
+### Performance Optimization
+
+1. **Resolution Matching**: Match costmap resolution to foot size
+2. **Update Frequency**: Balance accuracy with computational load
+3. **Predictive Planning**: Plan several steps ahead
+4. **Sensor Fusion**: Combine multiple sensors for robust navigation
+
+### Testing and Validation
+
+1. **Simulation First**: Test extensively in simulation
+2. **Gradual Complexity**: Start with simple scenarios
+3. **Real-World Validation**: Verify on physical robot
+4. **Edge Cases**: Test unusual scenarios
+
+## Troubleshooting Common Issues
+
+### Navigation Failures
+- Check costmap inflation settings
+- Verify sensor data quality
+- Validate footstep planning parameters
+- Ensure proper localization
+
+### Balance Problems
+- Tune balance controller gains
+- Verify IMU calibration
+- Check CoM estimation
+- Adjust step timing parameters
+
+### Performance Issues
+- Optimize costmap resolution
+- Reduce planning frequency if possible
+- Check CPU/GPU utilization
+- Profile individual components
+
+## RAG Summary
+
+Nav2 can be adapted for bipedal humanoid navigation by addressing unique challenges like balance control, footstep planning, and motion constraints. Key modifications include specialized costmap configuration, footstep planning algorithms, balance control integration, and humanoid-specific recovery behaviors. The system requires careful tuning of parameters to ensure stable and efficient navigation while maintaining balance.
+
+## Knowledge Check
+
+1. What are the main challenges of bipedal navigation compared to wheeled navigation?
+2. How do you configure Nav2 costmaps for humanoid robots?
+3. What is the role of footstep planning in humanoid navigation?
+4. How do you implement balance control in humanoid navigation systems?
+5. What are the key considerations for humanoid-specific recovery behaviors?

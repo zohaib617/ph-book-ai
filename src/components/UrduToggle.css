@@ -1,0 +1,35 @@
+.urdu-toggle-container {
+  margin-bottom: 20px;
+  text-align: right;
+}
+
+.urdu-toggle-btn {
+  background-color: #4361ee;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.urdu-toggle-btn:hover {
+  background-color: #3a56d4;
+  transform: translateY(-1px);
+}
+
+.urdu-toggle-btn.urdu-mode {
+  background-color: #f72585;
+}
+
+.urdu-toggle-btn.urdu-mode:hover {
+  background-color: #d3166d;
+}
+
+/* Urdu text styling */
+.urdu-text {
+  direction: rtl;
+  text-align: right;
+  font-family: 'Jameel Noori Nastaleeq', 'Urdu Typesetting', serif;
+}
