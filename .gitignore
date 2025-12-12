@@ -1,0 +1,12 @@
+# Node.js dependencies
+node_modules/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Environment files
+.env
+
+# Logs
+*.log
