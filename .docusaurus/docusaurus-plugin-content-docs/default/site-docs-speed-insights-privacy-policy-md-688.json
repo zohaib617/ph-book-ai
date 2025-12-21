@@ -1,0 +1,27 @@
+{
+  "id": "speed-insights/privacy-policy",
+  "title": "Privacy and Compliance Standards",
+  "description": "Vercel Speed Insights is designed with privacy and compliance as core principles. This guide explains how Speed Insights respects user privacy and complies with major data protection regulations.",
+  "source": "@site/docs/speed-insights/privacy-policy.md",
+  "sourceDirName": "speed-insights",
+  "slug": "/speed-insights/privacy-policy",
+  "permalink": "/ur/docs/speed-insights/privacy-policy",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/docs/speed-insights/privacy-policy.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 5,
+  "frontMatter": {
+    "sidebar_position": 5
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Understanding Speed Insights Metrics",
+    "permalink": "/ur/docs/speed-insights/metrics"
+  },
+  "next": {
+    "title": "Troubleshooting Speed Insights",
+    "permalink": "/ur/docs/speed-insights/troubleshooting"
+  }
+}

@@ -5,7 +5,7 @@
   "source": "@site/docs/modules/module-4-vla/index.md",
   "sourceDirName": "modules/module-4-vla",
   "slug": "/modules/module-4-vla/",
-  "permalink": "/docs/modules/module-4-vla/",
+  "permalink": "/ur/docs/modules/module-4-vla/",
   "draft": false,
   "unlisted": false,
   "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/docs/modules/module-4-vla/index.md",
@@ -18,10 +18,10 @@
   "sidebar": "tutorialSidebar",
   "previous": {
     "title": "Nav2 for Bipedal Humanoid Movement",
-    "permalink": "/docs/modules/module-3-ai-brain/nav2-bipedal"
+    "permalink": "/ur/docs/modules/module-3-ai-brain/nav2-bipedal"
   },
   "next": {
     "title": "Voice-to-Action (Whisper)",
-    "permalink": "/docs/modules/module-4-vla/whisper-voice-action"
+    "permalink": "/ur/docs/modules/module-4-vla/whisper-voice-action"
   }
 }

@@ -1,133 +1,126 @@
 {
-  "/__docusaurus/debug-5ff": {
-    "__comp": "__comp---theme-debug-config-23-a-2ff",
+  "/ur/docs-add": {
+    "__comp": "5e95c892",
     "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
+      "plugin": "aba21aa0"
     }
   },
-  "/__docusaurus/debug/config-5ba": {
-    "__comp": "__comp---theme-debug-config-23-a-2ff",
-    "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
-    }
+  "/ur/docs-f52": {
+    "__comp": "a7bd4aaa",
+    "__props": "04f2558c"
   },
-  "/__docusaurus/debug/content-a2b": {
-    "__comp": "__comp---theme-debug-contentba-8-ce7",
+  "/ur/docs-46a": {
+    "__comp": "a94703ab"
+  },
+  "/ur/docs/category/speed-insights-18e": {
+    "__comp": "14eb3368",
+    "__props": "32636491"
+  },
+  "/ur/docs/intro/-222": {
+    "__comp": "17896441",
+    "content": "7d744e69"
+  },
+  "/ur/docs/modules/module-1-ros2/-e6d": {
+    "__comp": "17896441",
+    "content": "87cd321d"
+  },
+  "/ur/docs/modules/module-1-ros2/nodes-topics-services-a28": {
+    "__comp": "17896441",
+    "content": "c6275bde"
+  },
+  "/ur/docs/modules/module-1-ros2/rclpy-python-agent-9cf": {
+    "__comp": "17896441",
+    "content": "99cc132a"
+  },
+  "/ur/docs/modules/module-1-ros2/urdf-humanoid-76f": {
+    "__comp": "17896441",
+    "content": "be3c8937"
+  },
+  "/ur/docs/modules/module-2-digital-twin/-213": {
+    "__comp": "17896441",
+    "content": "b0300d58"
+  },
+  "/ur/docs/modules/module-2-digital-twin/gazebo-physics-0a5": {
+    "__comp": "17896441",
+    "content": "eb7b17dd"
+  },
+  "/ur/docs/modules/module-2-digital-twin/sensor-simulation-ffe": {
+    "__comp": "17896441",
+    "content": "cdb6f5ad"
+  },
+  "/ur/docs/modules/module-2-digital-twin/unity-rendering-e94": {
+    "__comp": "17896441",
+    "content": "df02b0e7"
+  },
+  "/ur/docs/modules/module-3-ai-brain/-e0c": {
+    "__comp": "17896441",
+    "content": "11225984"
+  },
+  "/ur/docs/modules/module-3-ai-brain/isaac-ros-pipelines-467": {
+    "__comp": "17896441",
+    "content": "d37e9398"
+  },
+  "/ur/docs/modules/module-3-ai-brain/isaac-sim-895": {
+    "__comp": "17896441",
+    "content": "c99bc61a"
+  },
+  "/ur/docs/modules/module-3-ai-brain/nav2-bipedal-6d2": {
+    "__comp": "17896441",
+    "content": "16a0ec17"
+  },
+  "/ur/docs/modules/module-4-vla/-066": {
+    "__comp": "17896441",
+    "content": "6bee640b"
+  },
+  "/ur/docs/modules/module-4-vla/autonomous-humanoid-39a": {
+    "__comp": "17896441",
+    "content": "9b987061"
+  },
+  "/ur/docs/modules/module-4-vla/llm-cognitive-planning-02d": {
+    "__comp": "17896441",
+    "content": "3205cc56"
+  },
+  "/ur/docs/modules/module-4-vla/whisper-voice-action-8be": {
+    "__comp": "17896441",
+    "content": "524ac44f"
+  },
+  "/ur/docs/speed-insights/frameworks-ca1": {
+    "__comp": "17896441",
+    "content": "d33c0986"
+  },
+  "/ur/docs/speed-insights/getting-started-5b0": {
+    "__comp": "17896441",
+    "content": "a433875c"
+  },
+  "/ur/docs/speed-insights/limits-and-pricing-ff8": {
+    "__comp": "17896441",
+    "content": "ab26ca02"
+  },
+  "/ur/docs/speed-insights/metrics-119": {
+    "__comp": "17896441",
+    "content": "839cc175"
+  },
+  "/ur/docs/speed-insights/optimization-88f": {
+    "__comp": "17896441",
+    "content": "98466f7e"
+  },
+  "/ur/docs/speed-insights/package-816": {
+    "__comp": "17896441",
+    "content": "204a64ca"
+  },
+  "/ur/docs/speed-insights/privacy-policy-ec4": {
+    "__comp": "17896441",
+    "content": "688c62e1"
+  },
+  "/ur/docs/speed-insights/troubleshooting-847": {
+    "__comp": "17896441",
+    "content": "cf79f35a"
+  },
+  "/ur/-3b1": {
+    "__comp": "c4f5d8e4",
     "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
+      "plugin": "a7456010"
     },
-    "__props": "__props---docusaurus-debug-content-3-c-0-be2"
-  },
-  "/__docusaurus/debug/globalData-c3c": {
-    "__comp": "__comp---theme-debug-global-dataede-0fa",
-    "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
-    }
-  },
-  "/__docusaurus/debug/metadata-156": {
-    "__comp": "__comp---theme-debug-site-metadata-68-e-3d4",
-    "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
-    }
-  },
-  "/__docusaurus/debug/registry-88c": {
-    "__comp": "__comp---theme-debug-registry-679-501",
-    "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
-    }
-  },
-  "/__docusaurus/debug/routes-000": {
-    "__comp": "__comp---theme-debug-routes-946-699",
-    "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
-    }
-  },
-  "/docs-608": {
-    "__comp": "__comp---theme-docs-root-5-e-9-0b6",
-    "__context": {
-      "plugin": "plugin---docsaba-d7c"
-    }
-  },
-  "/docs-c35": {
-    "__comp": "__comp---theme-doc-version-roota-7-b-5de",
-    "__props": "__props---docs-005-788"
-  },
-  "/docs-71d": {
-    "__comp": "__comp---theme-doc-roota-94-67a"
-  },
-  "/docs/intro/-014": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-intro-7-d-7-639"
-  },
-  "/docs/modules/module-1-ros2/-c82": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-1-ros-2-87-c-140"
-  },
-  "/docs/modules/module-1-ros2/nodes-topics-services-e6c": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-1-ros-2-nodes-topics-servicesc-62-483"
-  },
-  "/docs/modules/module-1-ros2/rclpy-python-agent-974": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-1-ros-2-rclpy-python-agent-99-c-e61"
-  },
-  "/docs/modules/module-1-ros2/urdf-humanoid-987": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-1-ros-2-urdf-humanoidbe-3-c6f"
-  },
-  "/docs/modules/module-2-digital-twin/-91f": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-2-digital-twin-b-03-dd9"
-  },
-  "/docs/modules/module-2-digital-twin/gazebo-physics-20d": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-2-digital-twin-gazebo-physicseb-7-485"
-  },
-  "/docs/modules/module-2-digital-twin/sensor-simulation-534": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-2-digital-twin-sensor-simulationcdb-f0f"
-  },
-  "/docs/modules/module-2-digital-twin/unity-rendering-eb0": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-2-digital-twin-unity-renderingdf-0-c78"
-  },
-  "/docs/modules/module-3-ai-brain/-0b3": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-3-ai-brain-112-dba"
-  },
-  "/docs/modules/module-3-ai-brain/isaac-ros-pipelines-a99": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-3-ai-brain-isaac-ros-pipelinesd-37-182"
-  },
-  "/docs/modules/module-3-ai-brain/isaac-sim-94f": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-3-ai-brain-isaac-simc-99-535"
-  },
-  "/docs/modules/module-3-ai-brain/nav2-bipedal-850": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-3-ai-brain-nav-2-bipedal-16-a-c8a"
-  },
-  "/docs/modules/module-4-vla/-d0e": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-4-vla-6-be-211"
-  },
-  "/docs/modules/module-4-vla/autonomous-humanoid-3fa": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-4-vla-autonomous-humanoid-9-b-9-be2"
-  },
-  "/docs/modules/module-4-vla/llm-cognitive-planning-18c": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-4-vla-llm-cognitive-planning-320-743"
-  },
-  "/docs/modules/module-4-vla/whisper-voice-action-a5d": {
-    "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-modules-module-4-vla-whisper-voice-action-524-e03"
-  },
-  "/-2e1": {
-    "__comp": "__comp---site-src-pages-index-jsc-4-f-f99",
-    "__context": {
-      "plugin": "plugin---a-74-9d6"
-    },
-    "config": "config---5-e-9-4f3"
+    "config": "5e9f5e1a"
   }
 }

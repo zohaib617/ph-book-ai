@@ -1,0 +1,27 @@
+{
+  "id": "speed-insights/getting-started",
+  "title": "Getting Started with Speed Insights",
+  "description": "This guide will help you get started with using Vercel Speed Insights on your project, showing you how to enable it, add the package to your project, deploy your app to Vercel, and view your data in the dashboard.",
+  "source": "@site/docs/speed-insights/getting-started.md",
+  "sourceDirName": "speed-insights",
+  "slug": "/speed-insights/getting-started",
+  "permalink": "/ur/docs/speed-insights/getting-started",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/docs/speed-insights/getting-started.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Speed Insights",
+    "permalink": "/ur/docs/category/speed-insights"
+  },
+  "next": {
+    "title": "Framework-Specific Implementation",
+    "permalink": "/ur/docs/speed-insights/frameworks"
+  }
+}

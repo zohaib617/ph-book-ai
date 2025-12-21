@@ -1,0 +1,8 @@
+{
+  "label": "Speed Insights",
+  "position": 5,
+  "link": {
+    "type": "generated-index",
+    "description": "Learn how to use Vercel Speed Insights for real user monitoring and performance optimization"
+  }
+}

@@ -5,7 +5,7 @@
   "source": "@site/docs/modules/module-3-ai-brain/03-nav2-bipedal.mdx",
   "sourceDirName": "modules/module-3-ai-brain",
   "slug": "/modules/module-3-ai-brain/nav2-bipedal",
-  "permalink": "/docs/modules/module-3-ai-brain/nav2-bipedal",
+  "permalink": "/ur/docs/modules/module-3-ai-brain/nav2-bipedal",
   "draft": false,
   "unlisted": false,
   "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/docs/modules/module-3-ai-brain/03-nav2-bipedal.mdx",
@@ -19,10 +19,10 @@
   "sidebar": "tutorialSidebar",
   "previous": {
     "title": "Isaac ROS Pipelines: VSLAM, Navigation",
-    "permalink": "/docs/modules/module-3-ai-brain/isaac-ros-pipelines"
+    "permalink": "/ur/docs/modules/module-3-ai-brain/isaac-ros-pipelines"
   },
   "next": {
     "title": "Module 4: Vision-Language-Action (VLA)",
-    "permalink": "/docs/modules/module-4-vla/"
+    "permalink": "/ur/docs/modules/module-4-vla/"
   }
 }

@@ -8,10 +8,10 @@ export default {
   "tagline": "An Educational Book on End-to-End Robotics Pipeline",
   "favicon": "img/favicon.ico",
   "url": "https://your-book-domain.com",
-  "baseUrl": "/",
+  "baseUrl": "/ur/",
   "organizationName": "your-org",
   "projectName": "ai-book",
-  "onBrokenLinks": "throw",
+  "onBrokenLinks": "warn",
   "i18n": {
     "defaultLocale": "en",
     "locales": [
