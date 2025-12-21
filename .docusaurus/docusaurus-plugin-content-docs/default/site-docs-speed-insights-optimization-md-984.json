@@ -1,0 +1,27 @@
+{
+  "id": "speed-insights/optimization",
+  "title": "Performance Optimization Guide",
+  "description": "This guide provides actionable strategies to improve your metrics based on Speed Insights data.",
+  "source": "@site/docs/speed-insights/optimization.md",
+  "sourceDirName": "speed-insights",
+  "slug": "/speed-insights/optimization",
+  "permalink": "/ur/docs/speed-insights/optimization",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/docs/speed-insights/optimization.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 8,
+  "frontMatter": {
+    "sidebar_position": 8
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Limits and Pricing",
+    "permalink": "/ur/docs/speed-insights/limits-and-pricing"
+  },
+  "next": {
+    "title": "Module 1: ROS 2 Fundamentals",
+    "permalink": "/ur/docs/modules/module-1-ros2/"
+  }
+}

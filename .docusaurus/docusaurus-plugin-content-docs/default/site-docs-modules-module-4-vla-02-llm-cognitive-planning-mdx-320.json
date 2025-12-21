@@ -5,7 +5,7 @@
   "source": "@site/docs/modules/module-4-vla/02-llm-cognitive-planning.mdx",
   "sourceDirName": "modules/module-4-vla",
   "slug": "/modules/module-4-vla/llm-cognitive-planning",
-  "permalink": "/docs/modules/module-4-vla/llm-cognitive-planning",
+  "permalink": "/ur/docs/modules/module-4-vla/llm-cognitive-planning",
   "draft": false,
   "unlisted": false,
   "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/docs/modules/module-4-vla/02-llm-cognitive-planning.mdx",
@@ -19,10 +19,10 @@
   "sidebar": "tutorialSidebar",
   "previous": {
     "title": "Voice-to-Action (Whisper)",
-    "permalink": "/docs/modules/module-4-vla/whisper-voice-action"
+    "permalink": "/ur/docs/modules/module-4-vla/whisper-voice-action"
   },
   "next": {
     "title": "Capstone: Autonomous Humanoid Pipeline",
-    "permalink": "/docs/modules/module-4-vla/autonomous-humanoid"
+    "permalink": "/ur/docs/modules/module-4-vla/autonomous-humanoid"
   }
 }

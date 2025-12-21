@@ -1,0 +1,27 @@
+{
+  "id": "speed-insights/limits-and-pricing",
+  "title": "Limits and Pricing",
+  "description": "Speed Insights is Vercel's real user monitoring (RUM) solution for understanding application performance. Here's what you need to know about limits, pricing, and how to optimize your usage.",
+  "source": "@site/docs/speed-insights/limits-and-pricing.md",
+  "sourceDirName": "speed-insights",
+  "slug": "/speed-insights/limits-and-pricing",
+  "permalink": "/ur/docs/speed-insights/limits-and-pricing",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/docs/speed-insights/limits-and-pricing.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 7,
+  "frontMatter": {
+    "sidebar_position": 7
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Troubleshooting Speed Insights",
+    "permalink": "/ur/docs/speed-insights/troubleshooting"
+  },
+  "next": {
+    "title": "Performance Optimization Guide",
+    "permalink": "/ur/docs/speed-insights/optimization"
+  }
+}

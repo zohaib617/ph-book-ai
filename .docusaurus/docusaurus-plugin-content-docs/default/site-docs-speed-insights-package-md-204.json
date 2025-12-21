@@ -1,0 +1,27 @@
+{
+  "id": "speed-insights/package",
+  "title": "Using the @vercel/speed-insights Package",
+  "description": "The @vercel/speed-insights package provides various options and configuration methods to customize Speed Insights for your specific needs.",
+  "source": "@site/docs/speed-insights/package.md",
+  "sourceDirName": "speed-insights",
+  "slug": "/speed-insights/package",
+  "permalink": "/ur/docs/speed-insights/package",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/docs/speed-insights/package.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Framework-Specific Implementation",
+    "permalink": "/ur/docs/speed-insights/frameworks"
+  },
+  "next": {
+    "title": "Understanding Speed Insights Metrics",
+    "permalink": "/ur/docs/speed-insights/metrics"
+  }
+}

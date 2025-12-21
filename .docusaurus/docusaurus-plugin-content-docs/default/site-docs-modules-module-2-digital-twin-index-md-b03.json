@@ -5,7 +5,7 @@
   "source": "@site/docs/modules/module-2-digital-twin/index.md",
   "sourceDirName": "modules/module-2-digital-twin",
   "slug": "/modules/module-2-digital-twin/",
-  "permalink": "/docs/modules/module-2-digital-twin/",
+  "permalink": "/ur/docs/modules/module-2-digital-twin/",
   "draft": false,
   "unlisted": false,
   "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/docs/modules/module-2-digital-twin/index.md",
@@ -18,10 +18,10 @@
   "sidebar": "tutorialSidebar",
   "previous": {
     "title": "URDF Basics for Humanoid Robots",
-    "permalink": "/docs/modules/module-1-ros2/urdf-humanoid"
+    "permalink": "/ur/docs/modules/module-1-ros2/urdf-humanoid"
   },
   "next": {
     "title": "Gazebo Physics: Gravity, Collisions",
-    "permalink": "/docs/modules/module-2-digital-twin/gazebo-physics"
+    "permalink": "/ur/docs/modules/module-2-digital-twin/gazebo-physics"
   }
 }
